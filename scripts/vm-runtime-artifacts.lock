@@ -1,0 +1,6 @@
+# Artifact version, guest architecture, SHA-256 from the signed upstream release manifest.
+# umoci.sha256sum v0.6.0 signature validated with signing subkey
+# B64E4955B29FA3D463F2A9062897FAD2B7E9446F of primary key
+# C9C370B246B09F6DBCFC744C34401015D1D2D386 (2025-10-15 release).
+v0.6.0 amd64 b51c267ec394499e42c6fde47f240b7b7dba57ea49df0b5acd304378b82a3b71
+v0.6.0 arm64 5cfd17f2e7a4bcf9ed67ea1b955ca893d200349b9ce6a3d3707dba415f458a1f

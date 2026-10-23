@@ -1,0 +1,250 @@
+# SPDX-FileCopyrightText: Copyright (c) 2026 the quarshell authors
+# SPDX-License-Identifier: Apache-2.0
+name: Live VM KVM acceptance
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  linux-kvm:
+    name: Linux KVM lifecycle
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    env:
+      QUARSHELL_VM_GUEST_ARCH: amd64
+    steps:
+      - name: Checkout quarshell-driver
+        uses: actions/checkout@v4
+        with:
+          path: quarshell-driver
+
+      - name: Checkout pinned OpenShell runtime build inputs
+        run: |
+          source_dir="$RUNNER_TEMP/openshell-v0.1.4"
+          git clone --depth 1 --branch v0.1.4 https://github.com/NVIDIA/OpenShell.git "$source_dir"
+          test "$(git -C "$source_dir" rev-parse HEAD)" = "5a7728c304b5528e954e9ae900cf21f84e1a12b1"
+
+      - name: Install pinned Rust toolchain for libkrun
+        run: |
+          curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --profile minimal --default-toolchain 1.95.0
+          echo "$HOME/.cargo/bin" >> "$GITHUB_PATH"
+
+      - name: Build pinned libkrun runtime
+        run: bash "$RUNNER_TEMP/openshell-v0.1.4/tasks/scripts/vm/build-libkrun.sh"
+
+      - name: Stage runtime libraries and source-pinned digest lock
+        shell: bash
+        run: |
+          set -euo pipefail
+          runtime_dir="$RUNNER_TEMP/quarshell-vm-runtime-libraries"
+          lock_path="$RUNNER_TEMP/quarshell-vm-runtime-trust.json"
+          build_dir="$RUNNER_TEMP/openshell-v0.1.4/target/libkrun-build"
+          mkdir -p "$runtime_dir"
+          cp "$build_dir/libkrun.so" "$runtime_dir/libkrun.so"
+          libkrunfw_path=$(find "$build_dir" -maxdepth 1 -type f -name 'libkrunfw.so.5*' -print -quit)
+          test -n "$libkrunfw_path"
+          cp "$libkrunfw_path" "$runtime_dir/libkrunfw.so.5"
+          chmod 0600 "$runtime_dir/libkrun.so" "$runtime_dir/libkrunfw.so.5"
+          libkrun_sha=$(sha256sum "$runtime_dir/libkrun.so" | awk '{print $1}')
+          libkrunfw_sha=$(sha256sum "$runtime_dir/libkrunfw.so.5" | awk '{print $1}')
+          printf '{"schema_version":1,"host":"linux/amd64","artifacts":{"libkrun.so":"%s","libkrunfw.so.5":"%s"}}\n' \
+            "$libkrun_sha" "$libkrunfw_sha" > "$lock_path"
+          chmod 0600 "$lock_path"
+          echo "OPENSHELL_VM_RUNTIME_DIR=$runtime_dir" >> "$GITHUB_ENV"
+          echo "QUARSHELL_VM_RUNTIME_TRUST_LOCK=$lock_path" >> "$GITHUB_ENV"
+
+      - name: Check GitHub-hosted KVM prerequisites
+        id: kvm
+        shell: bash
+        run: |
+          if [[ ! -c /dev/kvm ]]; then
+            echo "::error::GitHub-hosted ubuntu-24.04 did not expose /dev/kvm"
+            lscpu
+            grep -m1 -E '^(flags|Features)' /proc/cpuinfo || true
+            ls -la /dev
+            exit 1
+          fi
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' \
+            | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --settle --name-match=kvm
+          ls -l /dev/kvm
+          exec 3<>/dev/kvm
+          exec 3>&-
+          test -s "$OPENSHELL_VM_RUNTIME_DIR/libkrun.so"
+          test -s "$OPENSHELL_VM_RUNTIME_DIR/libkrunfw.so.5"
+          test -s "$QUARSHELL_VM_RUNTIME_TRUST_LOCK"
+          echo "available=true" >> "$GITHUB_OUTPUT"
+          echo "GitHub-hosted runner has usable KVM access and the pinned libkrun runtime bundle."
+
+      - name: Checkout quarshell-core
+        uses: actions/checkout@v4
+        with:
+          repository: KLORQ/quarshell-core
+          ref: v0.5.2
+          path: quarshell-core
+
+      - name: Checkout quarshell-driver-vm
+        uses: actions/checkout@v4
+        with:
+          repository: KLORQ/quarshell-driver-vm
+          ref: v0.1.10
+          path: quarshell-driver-vm
+
+      - name: Checkout quarshell-runtime helpers
+        uses: actions/checkout@v4
+        with:
+          repository: KLORQ/quarshell-runtime
+          ref: v0.1.5
+          path: quarshell-runtime
+
+      - name: Checkout quarshell-proto workspace dependency
+        uses: actions/checkout@v4
+        with:
+          repository: KLORQ/quarshell-proto
+          ref: v0.2.6
+          path: quarshell-proto
+      - name: Checkout quarshell-proxy workspace dependency
+        uses: actions/checkout@v4
+        with:
+          repository: KLORQ/quarshell-proxy
+          ref: v0.1.5
+          path: quarshell-proxy
+
+      - name: Checkout quarshell-cli acceptance executable
+        uses: actions/checkout@v4
+        with:
+          repository: KLORQ/quarshell-cli
+          ref: v0.1.6
+          path: quarshell-cli
+      - name: Configure Go workspace
+        working-directory: ${{ github.workspace }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          workspace="$GITHUB_WORKSPACE"
+          {
+            echo 'go 1.27.0'
+            echo 'use ('
+            modules=()
+            for d in "$workspace"/quarshell-*; do
+              [[ -f "$d/go.mod" ]] && modules+=("${d##*/}")
+            done
+            for d in "${modules[@]}"; do echo "  ./$d"; done
+            echo ')'
+            echo 'replace ('
+            for d in "${modules[@]}"; do
+              module="$(sed -n 's/^module[[:space:]][[:space:]]*//p' "$workspace/$d/go.mod" | head -n 1)"
+              [[ -n "$module" ]] || continue
+              for source in "${modules[@]}"; do
+                awk -v module="$module" '$1 == module && $2 ~ /^v[0-9]/ { print $2 }; $1 == "require" && $2 == module && $3 ~ /^v[0-9]/ { print $3 }' "$workspace/$source/go.mod"
+              done | sort -u | while IFS= read -r version; do
+                printf '  %s %s => ./%s\n' "$module" "$version" "$d"
+              done
+            done
+            echo ')'
+          } > "$workspace/go.work"
+          echo "Wrote go.work:" && cat "$workspace/go.work"
+      - uses: actions/setup-go@v5
+        with:
+          go-version: 1.27.3
+          cache: true
+          cache-dependency-path: |
+            quarshell-driver/go.sum
+            quarshell-core/go.sum
+            quarshell-runtime/go.sum
+
+      - name: Run live KVM lifecycle and engine acceptance in disposable container
+        if: steps.kvm.outputs.available == 'true'
+        working-directory: quarshell-driver
+        shell: bash
+        run: |
+          set -euo pipefail
+          runner_uid=$(id -u)
+          runner_gid=$(id -g)
+          docker_gid=$(stat -c '%g' /var/run/docker.sock)
+          go_root=$(go env GOROOT)
+          go_path=$(go env GOPATH)
+          runtime_dir="$OPENSHELL_VM_RUNTIME_DIR"
+          trust_lock="$QUARSHELL_VM_RUNTIME_TRUST_LOCK"
+          build_dir="$RUNNER_TEMP/quarshell-vm-runtime"
+          mkdir -p "$build_dir"
+
+          # GitHub-hosted runners restrict mount propagation in the job's outer
+          # namespace. A privileged disposable container supplies the kernel
+          # capability; all Quarshell processes still run under the non-root
+          # runner UID, which is the behavior the worker isolation tests verify.
+          docker run --rm --privileged --device=/dev/kvm --security-opt seccomp=unconfined \
+            --volume "$GITHUB_WORKSPACE:/workspace" \
+            --volume /var/run/docker.sock:/var/run/docker.sock \
+            --volume "$runtime_dir:$runtime_dir:ro" \
+            --volume "$trust_lock:$trust_lock:ro" \
+            --volume "$build_dir:$build_dir" \
+            --volume "$go_root:/opt/go:ro" \
+            --volume "$go_path:/go" \
+            --workdir /workspace/quarshell-driver \
+            --env RUNNER_UID="$runner_uid" \
+            --env RUNNER_GID="$runner_gid" \
+            --env DOCKER_GID="$docker_gid" \
+            --env OPENSHELL_VM_RUNTIME_DIR="$runtime_dir" \
+            --env QUARSHELL_VM_RUNTIME_TRUST_LOCK="$trust_lock" \
+            --env QUARSHELL_VM_BUILD_DIR="$build_dir" \
+            --env QUARSHELL_VM_GUEST_ARCH=amd64 \
+            --env GITHUB_WORKSPACE=/workspace \
+            ubuntu:24.04 bash -euc '
+              apt-get update
+              DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+                ca-certificates curl docker.io e2fsprogs libcap-ng0 libdrm2 libegl1 \
+                libepoxy0 libgbm1 libgl1 libseccomp2 libvirglrenderer1 python3 util-linux
+              if ! getent group "$RUNNER_GID" >/dev/null; then
+                groupadd --gid "$RUNNER_GID" runner
+              fi
+              runner_group=$(getent group "$RUNNER_GID" | cut -d: -f1)
+              if ! getent group "$DOCKER_GID" >/dev/null; then
+                groupadd --gid "$DOCKER_GID" dockerhost
+              fi
+              docker_group=$(getent group "$DOCKER_GID" | cut -d: -f1)
+              useradd --uid "$RUNNER_UID" --gid "$runner_group" --groups "$docker_group" \
+                --home-dir /tmp/runner-home --create-home --shell /bin/bash runner
+              setpriv --reuid "$RUNNER_UID" --regid "$runner_group" --init-groups -- \
+                env HOME=/tmp/runner-home GOROOT=/opt/go GOPATH=/go \
+                PATH=/opt/go/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin \
+                bash -euc "
+                  go build -C ../quarshell-cli -o \"$QUARSHELL_VM_BUILD_DIR/quarshell-proxy-cli\" ./cmd/quarshell
+                  export QUARSHELL_VM_TEST_PROXY_CLI=\"$QUARSHELL_VM_BUILD_DIR/quarshell-proxy-cli\"
+                  ./scripts/test-live-kvm-script.sh
+                  go test -C ../quarshell-driver-vm ./vm -v -run \"^TestWorkerIsolationNamespaceSubprocess\$\" -count=1
+                  ./scripts/run-live-kvm-acceptance.sh
+                  E2E_KEEP_TMP=1 ./scripts/run-live-kvm-docker-acceptance.sh
+                  E2E_KEEP_TMP=1 ./scripts/run-live-kvm-podman-acceptance.sh
+                  QUARSHELL_VM_PODMAN_ROOTLESS_ACCEPTANCE=1 QUARSHELL_VM_TEST_NAME=TestLiveMicroVMNestedPodmanRootless E2E_KEEP_TMP=1 ./scripts/run-live-kvm-podman-acceptance.sh
+                "
+            '
+
+      - name: Upload engine-in-MicroVM fixture evidence
+        if: always() && steps.kvm.outputs.available == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: engines-in-microvm-amd64-${{ github.run_id }}
+          path: |
+            ${{ runner.temp }}/quarshell-vm-runtime/vm-runtime-manifest.json
+            ${{ runner.temp }}/quarshell-vm-runtime/vm-runtime-libraries.json
+            ${{ runner.temp }}/quarshell-vm-runtime/test-events-*.jsonl
+            ${{ runner.temp }}/quarshell-vm-runtime/console-tail-*.log
+            ${{ runner.temp }}/quarshell-vm-runtime/nested-docker-fixture/docker-engine-rootfs.tar
+            ${{ runner.temp }}/quarshell-vm-runtime/nested-docker-fixture/alpine-image.tar
+            ${{ runner.temp }}/quarshell-vm-runtime/nested-podman-fixture/podman-engine-rootfs.tar
+            ${{ runner.temp }}/quarshell-vm-runtime/nested-podman-fixture/alpine-image.tar
+            ${{ runner.temp }}/quarshell-vm-runtime/nested-podman-fixture/podman6-fixture-image-id.txt
+            quarshell-driver/scripts/vm-engine-fixtures.lock.json
+          if-no-files-found: ignore
+          retention-days: 7
+
+      - name: Remove this run's VM runtime and engine fixtures
+        if: always()
+        run: rm -rf "${{ runner.temp }}/quarshell-vm-runtime" "${{ runner.temp }}/quarshell-vm-runtime-libraries" "${{ runner.temp }}/quarshell-vm-runtime-trust.json" "${{ runner.temp }}/openshell-v0.1.4"
