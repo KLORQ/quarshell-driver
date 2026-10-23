@@ -1,6 +1,6 @@
 # Roadmap — quarshell-driver
 
-Status: **v0.3.0** (release prepared) · Depends on [quarshell-core](https://github.com/KLORQ/quarshell-core) `v0.3.0` and quarshell-proxy `v0.3.0`
+Status: pre-stable API · Current module tag: `v0.1.1` · Dependencies are listed in `go.mod`.
 
 ## This module
 
@@ -11,6 +11,9 @@ Status: **v0.3.0** (release prepared) · Depends on [quarshell-core](https://git
 | D3 | **GPU / CDI polish** | Inventory-based device pick; Podman parity |
 | D4 | **Windows build matrix** | Keep SIGWINCH / TTY paths build-tagged clean |
 
+
 ## Release
 
-Requires quarshell-core `v0.3.0` and quarshell-proxy `v0.3.0` · release after core, proxy, and providers.
+This module follows its own pre-stable 0.x version sequence. Publish dependencies
+first, update consumers to the published tags, and verify with `GOWORK=off`. Never
+rewrite a published tag.
