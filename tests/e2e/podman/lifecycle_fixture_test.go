@@ -13,7 +13,6 @@ import (
 	"reflect"
 	"strconv"
 	"strings"
-	"syscall"
 	"testing"
 	"time"
 
@@ -698,7 +697,7 @@ mapped_gid=$(awk -v id="$gid" '$1 <= id && id < $1 + $3 { print $2 + id - $1; fo
 			if err != nil {
 				t.Fatalf("stat host-side %s ownership marker: %v; probe=%q", mode, err, probeOutput)
 			}
-			owner, ok := info.Sys().(*syscall.Stat_t)
+			owner, ok := hostFileOwner(info)
 			if !ok {
 				t.Fatalf("host-side %s ownership marker has unsupported stat type %T", mode, info.Sys())
 			}
@@ -711,8 +710,8 @@ mapped_gid=$(awk -v id="$gid" '$1 <= id && id < $1 + $3 { print $2 + id - $1; fo
 				expectedUID = rootlessHostID(mode, mappedUID, subordinateStart)
 				expectedGID = rootlessHostID(mode, mappedGID, subordinateStart)
 			}
-			if uint64(owner.Uid) != expectedUID || uint64(owner.Gid) != expectedGID {
-				t.Fatalf("%s bind ownership mismatch: guest maps workload 1000:1000 to host %d:%d, file owner is %d:%d; maps=%q", mode, expectedUID, expectedGID, owner.Uid, owner.Gid, probeOutput)
+			if owner.uid != expectedUID || owner.gid != expectedGID {
+				t.Fatalf("%s bind ownership mismatch: guest maps workload 1000:1000 to host %d:%d, file owner is %d:%d; maps=%q", mode, expectedUID, expectedGID, owner.uid, owner.gid, probeOutput)
 			}
 		})
 	}
