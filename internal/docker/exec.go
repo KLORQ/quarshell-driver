@@ -1,0 +1,370 @@
+// Package docker implements driver.Backend via the Docker Engine API.
+package docker
+
+import (
+	"bytes"
+	"context"
+	"fmt"
+	"io"
+	"net"
+	"os"
+	"strings"
+	"time"
+
+	"github.com/moby/moby/api/pkg/stdcopy"
+	"github.com/moby/moby/client"
+	"golang.org/x/term"
+
+	core "github.com/KLORQ/quarshell-core"
+	"github.com/KLORQ/quarshell-core/defaults"
+	"github.com/KLORQ/quarshell-driver/driver"
+	"github.com/KLORQ/quarshell-driver/internal/mounts"
+)
+
+const execOutputLimit = 8 << 20
+
+type cappedOutput struct {
+	bytes.Buffer
+	truncated bool
+}
+
+func (w *cappedOutput) Write(p []byte) (int, error) {
+	n := len(p)
+	remaining := execOutputLimit - w.Len()
+	if remaining > 0 {
+		if len(p) > remaining {
+			p = p[:remaining]
+		}
+		_, _ = w.Buffer.Write(p)
+	}
+	if len(p) < n {
+		w.truncated = true
+	}
+	return n, nil
+}
+
+// Exec runs a command in the container. With TTY, attaches stdin/stdout in raw mode.
+// When the sandbox was created with quarshell-init, argv is wrapped: quarshell-init -- <cmd>.
+//
+// Docker ExecCreate Env replaces the process environment when non-empty.
+// We always merge the container's Config.Env first so HTTP_PROXY / CA / HOME from
+// create survive (otherwise `quarshell exec` / create `-- agent` cannot reach the sidecar).
+func (d *Driver) Exec(ctx context.Context, id core.ID, req driver.ExecRequest) (driver.ExecResult, error) {
+	if len(req.Argv) == 0 {
+		return driver.ExecResult{}, fmt.Errorf("docker exec: empty argv")
+	}
+	argv := req.Argv
+	workdir := mounts.WorkdirInContainer
+	if strings.TrimSpace(req.WorkDir) != "" {
+		workdir = strings.TrimSpace(req.WorkDir)
+	}
+	var containerEnv []string
+	info, err := d.cli.ContainerInspect(ctx, string(id), client.ContainerInspectOptions{})
+	if err != nil {
+		return driver.ExecResult{}, fmt.Errorf("docker exec inspect container: %w", err)
+	}
+	if info.Container.Config == nil {
+		return driver.ExecResult{}, fmt.Errorf("docker exec: container config is unavailable")
+	}
+	{
+		containerEnv = append([]string{}, info.Container.Config.Env...)
+		if info.Container.Config.Labels[labelInit] == "1" {
+			argv = append([]string{"/quarshell/quarshell-init", "--"}, req.Argv...)
+		}
+		// Proxy sidecar has no /workspace mount; exec must not chdir there.
+		if info.Container.Config.Labels[labelRole] == roleProxy {
+			workdir = "/"
+		}
+	}
+	tty := req.TTY
+	inFd := int(os.Stdin.Fd())
+	outFd := int(os.Stdout.Fd())
+	hostTTY := tty && term.IsTerminal(inFd)
+
+	// Prefer stdout for size (same as docker CLI Out().GetTtySize).
+	sizeFd := outFd
+	if !term.IsTerminal(sizeFd) {
+		sizeFd = inFd
+	}
+
+	var consoleSize client.ConsoleSize
+	if tty && req.Columns > 0 && req.Rows > 0 {
+		consoleSize = client.ConsoleSize{Height: uint(req.Rows), Width: uint(req.Columns)}
+	}
+	// Container env (proxy, CA, PATH) + caller overrides (credential placeholders).
+	env := ensureTTYEnv(mergeEnv(containerEnv, req.Env))
+	// Do not inject LINES/COLUMNS: Node TUIs prefer env over ioctl, and a wrong
+	// pair permanently squashes the UI. Size comes from ConsoleSize + resize.
+	if tty && consoleSize == (client.ConsoleSize{}) && (hostTTY || term.IsTerminal(sizeFd)) {
+		if width, height, err := term.GetSize(sizeFd); err == nil && width > 0 && height > 0 {
+			// Docker ConsoleSize is [height, width] (docker CLI fillConsoleSize).
+			consoleSize = client.ConsoleSize{Height: uint(height), Width: uint(width)}
+		}
+	}
+
+	var stdin io.Reader
+	switch {
+	case req.StdinReader != nil:
+		stdin = req.StdinReader
+	case len(req.Stdin) > 0:
+		stdin = bytes.NewReader(req.Stdin)
+	}
+	if tty && stdin == nil {
+		stdin = os.Stdin
+	}
+	execID, err := d.cli.ExecCreate(ctx, string(id), client.ExecCreateOptions{
+		Cmd:          argv,
+		Env:          env,
+		AttachStdout: true,
+		AttachStderr: true,
+		AttachStdin:  stdin != nil,
+		TTY:          tty,
+		WorkingDir:   workdir,
+		ConsoleSize:  consoleSize,
+	})
+	if err != nil {
+		return driver.ExecResult{}, fmt.Errorf("docker exec create: %w", err)
+	}
+	attach, err := d.cli.ExecAttach(ctx, execID.ID, client.ExecAttachOptions{
+		TTY:         tty,
+		ConsoleSize: consoleSize,
+	})
+	if err != nil {
+		return driver.ExecResult{}, fmt.Errorf("docker exec attach: %w", err)
+	}
+	defer attach.Close()
+	setConnNoDelay(attach.Conn)
+	streamDone := make(chan struct{})
+	defer close(streamDone)
+	go func() {
+		select {
+		case <-ctx.Done():
+			attach.Close()
+		case <-streamDone:
+		}
+	}()
+	if stdin != nil && !tty {
+		go func() {
+			_, _ = io.Copy(attach.Conn, stdin)
+			_ = attach.CloseWrite()
+		}()
+	}
+
+	var stdoutCapture, stderrCapture cappedOutput
+	stdout, stderr := io.Writer(os.Stdout), io.Writer(os.Stderr)
+	if req.CaptureOutput {
+		stdout, stderr = &stdoutCapture, &stderrCapture
+	}
+	if tty {
+		if hostTTY {
+			old, err := term.MakeRaw(inFd)
+			if err != nil {
+				return driver.ExecResult{}, fmt.Errorf("docker exec raw terminal: %w", err)
+			}
+			defer func() { _ = term.Restore(inFd, old) }()
+			// Resize before streaming so TUI mouse/scroll sees a real size on first paint.
+			resizeExecOnce(ctx, d.cli, execID.ID, sizeFd)
+			go resizeExecTTY(ctx, d.cli, execID.ID, sizeFd)
+		}
+		// When the remote PTY closes (e.g. shell `exit`), stop waiting on stdin —
+		// otherwise stdin copy blocks until another keystroke.
+		outDone := make(chan struct{})
+		go func() {
+			defer close(outDone)
+			_, _ = io.Copy(stdout, attach.Reader)
+		}()
+		go func() {
+			// Small reads so mouse-wheel CSI sequences are forwarded promptly.
+			_, _ = copyStdinTTY(attach.Conn, stdin)
+			_ = attach.CloseWrite()
+		}()
+		<-outDone
+		_ = attach.CloseWrite()
+	} else {
+		_, _ = stdcopy.StdCopy(stdout, stderr, attach.Reader)
+	}
+
+	inspect, err := d.cli.ExecInspect(ctx, execID.ID, client.ExecInspectOptions{})
+	if err != nil {
+		return driver.ExecResult{}, fmt.Errorf("docker exec inspect: %w", err)
+	}
+	return driver.ExecResult{ExitCode: inspect.ExitCode, Stdout: stdoutCapture.Bytes(), Stderr: stderrCapture.Bytes(), OutputTruncated: stdoutCapture.truncated || stderrCapture.truncated}, nil
+}
+
+// ensureTTYEnv forces a guest TERM that Debian ships terminfo for.
+// Host values like xterm-kitty / xterm-ghostty break mouse scroll inside the container.
+
+// ensureTTYEnv forces a guest TERM that Debian ships terminfo for.
+// Host values like xterm-kitty / xterm-ghostty break mouse scroll inside the container.
+func ensureTTYEnv(base []string) []string {
+	env := append([]string{}, base...)
+	termName := strings.TrimSpace(os.Getenv("TERM"))
+	switch {
+	case termName == "" || termName == "dumb" || termName == "unknown":
+		termName = "xterm-256color"
+	case strings.Contains(termName, "kitty"),
+		strings.Contains(termName, "ghostty"),
+		strings.Contains(termName, "alacritty"),
+		strings.HasPrefix(termName, "tmux"),
+		strings.HasPrefix(termName, "screen"):
+		// Keep 256color semantics; container rarely has fancy terminfo entries.
+		termName = "xterm-256color"
+	}
+	env = mergeEnv(env, []string{"TERM=" + termName})
+	if os.Getenv("COLORTERM") == "" {
+		env = mergeEnv(env, []string{"COLORTERM=truecolor"})
+	}
+	return env
+}
+
+func setConnNoDelay(c net.Conn) {
+	type noDelayer interface{ SetNoDelay(bool) error }
+	if nd, ok := c.(noDelayer); ok {
+		_ = nd.SetNoDelay(true)
+	}
+	if tcp, ok := c.(*net.TCPConn); ok {
+		_ = tcp.SetNoDelay(true)
+	}
+}
+
+// copyStdinTTY forwards host key/mouse bytes with a small buffer (not io.Copy's 32KiB).
+
+// copyStdinTTY forwards host key/mouse bytes with a small buffer (not io.Copy's 32KiB).
+func copyStdinTTY(dst io.Writer, src io.Reader) (int64, error) {
+	buf := make([]byte, 256)
+	var n int64
+	for {
+		nr, er := src.Read(buf)
+		if nr > 0 {
+			nw, ew := dst.Write(buf[:nr])
+			n += int64(nw)
+			if ew != nil {
+				return n, ew
+			}
+			if nr != nw {
+				return n, io.ErrShortWrite
+			}
+		}
+		if er != nil {
+			if er == io.EOF {
+				return n, nil
+			}
+			return n, er
+		}
+	}
+}
+
+func resizeExecOnce(ctx context.Context, cli *client.Client, execID string, inFd int) {
+	width, height, err := term.GetSize(inFd)
+	if err != nil || width <= 0 || height <= 0 {
+		return
+	}
+	_, _ = cli.ExecResize(ctx, execID, client.ExecResizeOptions{
+		Height: uint(height),
+		Width:  uint(width),
+	})
+}
+
+// Delete removes sandbox container, proxy sidecar, quarshell network, and data volume.
+
+// EnsureSSHDaemon starts quarshell-sshd as root on the relay socket
+// (idempotent: sshd exits when a live daemon already owns the socket) and
+// waits until the socket exists. Returns driver.ErrSSHDisabled for sandboxes
+// created without SSH.
+func (d *Driver) EnsureSSHDaemon(ctx context.Context, id core.ID) error {
+	info, err := d.cli.ContainerInspect(ctx, string(id), client.ContainerInspectOptions{})
+	if err != nil {
+		return err
+	}
+	if info.Container.Config == nil || info.Container.Config.Labels[labelSSH] != "1" {
+		return driver.ErrSSHDisabled
+	}
+	if info.Container.State == nil || !info.Container.State.Running {
+		return fmt.Errorf("sandbox is not running")
+	}
+	sshSocket := d.sandboxSSHSocketPath()
+	script := "exec " + defaults.GuestSSHD + " --socket " + shellQuote(sshSocket) + " >>" + defaults.GuestSSHLog + " 2>&1"
+	execID, err := d.cli.ExecCreate(ctx, string(id), client.ExecCreateOptions{
+		Cmd:        []string{"/bin/sh", "-c", script},
+		User:       "0",
+		WorkingDir: "/",
+	})
+	if err != nil {
+		return fmt.Errorf("sshd exec create: %w", err)
+	}
+	if _, err := d.cli.ExecStart(ctx, execID.ID, client.ExecStartOptions{Detach: true}); err != nil {
+		return fmt.Errorf("sshd exec start: %w", err)
+	}
+	deadline := time.Now().Add(readinessTimeout)
+	for time.Now().Before(deadline) {
+		if code, err := d.rawExec(ctx, string(id), []string{"test", "-S", sshSocket}); err == nil && code == 0 {
+			return nil
+		}
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-time.After(readinessPollInterval):
+		}
+	}
+	_, sshdLog, logErr := d.rawExecOutput(ctx, string(id), []string{"cat", defaults.GuestSSHLog})
+	if logErr != nil {
+		logs, containerLogErr := d.containerLogText(ctx, string(id))
+		if containerLogErr == nil && strings.TrimSpace(logs) != "" {
+			return fmt.Errorf("sshd socket %s did not appear (guest log read failed: %v); container output: %s", sshSocket, logErr, strings.TrimSpace(logs))
+		}
+		return fmt.Errorf("sshd socket %s did not appear (see %s; log read failed: %v)", sshSocket, defaults.GuestSSHLog, logErr)
+	}
+	if strings.TrimSpace(sshdLog) != "" {
+		return fmt.Errorf("sshd socket %s did not appear: %s", sshSocket, strings.TrimSpace(sshdLog))
+	}
+	return fmt.Errorf("sshd socket %s did not appear (see %s; log is empty)", sshSocket, defaults.GuestSSHLog)
+}
+
+func (d *Driver) containerLogText(ctx context.Context, id string) (string, error) {
+	logs, err := d.cli.ContainerLogs(ctx, id, client.ContainerLogsOptions{ShowStdout: true, ShowStderr: true, Timestamps: false})
+	if err != nil {
+		return "", err
+	}
+	defer logs.Close()
+	var output bytes.Buffer
+	if _, err := stdcopy.StdCopy(&output, &output, logs); err != nil {
+		return output.String(), err
+	}
+	return output.String(), nil
+}
+
+// rawExec runs argv as root without the quarshell-init wrapper.
+
+// rawExec runs argv as root without the quarshell-init wrapper.
+func (d *Driver) rawExec(ctx context.Context, id string, argv []string) (int, error) {
+	code, _, err := d.rawExecOutput(ctx, id, argv)
+	return code, err
+}
+
+func (d *Driver) rawExecOutput(ctx context.Context, id string, argv []string) (int, string, error) {
+	execID, err := d.cli.ExecCreate(ctx, id, client.ExecCreateOptions{
+		Cmd:          argv,
+		User:         "0",
+		AttachStdout: true,
+		AttachStderr: true,
+		WorkingDir:   "/",
+	})
+	if err != nil {
+		return -1, "", err
+	}
+	attach, err := d.cli.ExecAttach(ctx, execID.ID, client.ExecAttachOptions{})
+	if err != nil {
+		return -1, "", err
+	}
+	var output bytes.Buffer
+	_, copyErr := stdcopy.StdCopy(&output, &output, attach.Reader)
+	attach.Close()
+	if copyErr != nil {
+		return -1, output.String(), copyErr
+	}
+	insp, err := d.cli.ExecInspect(ctx, execID.ID, client.ExecInspectOptions{})
+	if err != nil {
+		return -1, output.String(), err
+	}
+	return insp.ExitCode, output.String(), nil
+}

@@ -1,0 +1,151 @@
+# SPDX-FileCopyrightText: Copyright (c) 2026 the quarshell authors
+# SPDX-License-Identifier: Apache-2.0
+name: Live VM KVM acceptance
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  linux-kvm:
+    name: Linux KVM lifecycle - ${{ matrix.arch }}
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: amd64
+            runner: [self-hosted, linux, x64, quarshell-kvm]
+          - arch: arm64
+            runner: [self-hosted, linux, ARM64, quarshell-kvm]
+    timeout-minutes: 40
+    env:
+      OPENSHELL_VM_RUNTIME_DIR: ${{ vars.OPENSHELL_VM_RUNTIME_DIR }}
+      # Configure as an absolute path on each trusted self-hosted runner, outside the checkout.
+      QUARSHELL_VM_RUNTIME_TRUST_LOCK: ${{ vars.QUARSHELL_VM_RUNTIME_TRUST_LOCK }}
+      QUARSHELL_VM_GUEST_ARCH: ${{ matrix.arch }}
+    steps:
+      - name: Checkout quarshell-driver
+        uses: actions/checkout@v4
+        with:
+          path: quarshell-driver
+
+      - name: Checkout quarshell-core
+        uses: actions/checkout@v4
+        with:
+          repository: KLORQ/quarshell-core
+          ref: v0.5.2
+          path: quarshell-core
+
+      - name: Checkout quarshell-runtime helpers
+        uses: actions/checkout@v4
+        with:
+          repository: KLORQ/quarshell-runtime
+          ref: v0.1.5
+          path: quarshell-runtime
+
+      - name: Checkout quarshell-proto workspace dependency
+        uses: actions/checkout@v4
+        with:
+          repository: KLORQ/quarshell-proto
+          ref: v0.2.6
+          path: quarshell-proto
+      - name: Checkout quarshell-proxy workspace dependency
+        uses: actions/checkout@v4
+        with:
+          repository: KLORQ/quarshell-proxy
+          ref: v0.1.5
+          path: quarshell-proxy
+      - name: Configure Go workspace
+        working-directory: ${{ github.workspace }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          workspace="$GITHUB_WORKSPACE"
+          {
+            echo 'go 1.27.0'
+            echo 'use ('
+            modules=()
+            for d in "$workspace"/quarshell-*; do
+              [[ -f "$d/go.mod" ]] && modules+=("${d##*/}")
+            done
+            for d in "${modules[@]}"; do echo "  ./$d"; done
+            echo ')'
+            echo 'replace ('
+            for d in "${modules[@]}"; do
+              module="$(sed -n 's/^module[[:space:]][[:space:]]*//p' "$workspace/$d/go.mod" | head -n 1)"
+              [[ -n "$module" ]] || continue
+              for source in "${modules[@]}"; do
+                awk -v module="$module" '$1 == module && $2 ~ /^v[0-9]/ { print $2 }; $1 == "require" && $2 == module && $3 ~ /^v[0-9]/ { print $3 }' "$workspace/$source/go.mod"
+              done | sort -u | while IFS= read -r version; do
+                printf '  %s %s => ./%s\n' "$module" "$version" "$d"
+              done
+            done
+          } > "$workspace/go.work"
+          echo "Wrote go.work:" && cat "$workspace/go.work"
+      - uses: actions/setup-go@v5
+        with:
+          go-version: 1.27.3
+          cache: true
+          cache-dependency-path: |
+            quarshell-driver/go.sum
+            quarshell-core/go.sum
+            quarshell-runtime/go.sum
+
+      - name: Verify Linux KVM and run live VM lifecycle
+        working-directory: quarshell-driver
+        env:
+          QUARSHELL_VM_BUILD_DIR: ${{ runner.temp }}/quarshell-vm-runtime
+        run: |
+          ./scripts/test-live-kvm-script.sh
+          ./scripts/run-live-kvm-acceptance.sh
+
+      - name: Run Docker inside a trusted Linux MicroVM
+        working-directory: quarshell-driver
+        env:
+          QUARSHELL_VM_BUILD_DIR: ${{ runner.temp }}/quarshell-vm-runtime
+          E2E_KEEP_TMP: "1"
+        run: ./scripts/run-live-kvm-docker-acceptance.sh
+
+      - name: Run Podman 6 inside a trusted Linux MicroVM
+        working-directory: quarshell-driver
+        env:
+          QUARSHELL_VM_BUILD_DIR: ${{ runner.temp }}/quarshell-vm-runtime
+          E2E_KEEP_TMP: "1"
+        run: ./scripts/run-live-kvm-podman-acceptance.sh
+
+      - name: Run rootless Podman 6 inside a trusted Linux MicroVM
+        working-directory: quarshell-driver
+        env:
+          QUARSHELL_VM_BUILD_DIR: ${{ runner.temp }}/quarshell-vm-runtime
+          QUARSHELL_VM_PODMAN_ROOTLESS_ACCEPTANCE: "1"
+          QUARSHELL_VM_TEST_NAME: TestLiveMicroVMNestedPodmanRootless
+          E2E_KEEP_TMP: "1"
+        run: ./scripts/run-live-kvm-podman-acceptance.sh
+
+      - name: Upload engine-in-MicroVM fixture evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: engines-in-microvm-${{ matrix.arch }}-${{ github.run_id }}
+          path: |
+            ${{ runner.temp }}/quarshell-vm-runtime/vm-runtime-manifest.json
+            ${{ runner.temp }}/quarshell-vm-runtime/vm-runtime-libraries.json
+            ${{ runner.temp }}/quarshell-vm-runtime/test-events-*.jsonl
+            ${{ runner.temp }}/quarshell-vm-runtime/console-tail-*.log
+            ${{ runner.temp }}/quarshell-vm-runtime/nested-docker-fixture/docker-engine-rootfs.tar
+            ${{ runner.temp }}/quarshell-vm-runtime/nested-docker-fixture/alpine-image.tar
+            ${{ runner.temp }}/quarshell-vm-runtime/nested-podman-fixture/podman-engine-rootfs.tar
+            ${{ runner.temp }}/quarshell-vm-runtime/nested-podman-fixture/alpine-image.tar
+            ${{ runner.temp }}/quarshell-vm-runtime/nested-podman-fixture/podman6-fixture-image-id.txt
+            quarshell-driver/scripts/vm-engine-fixtures.lock.json
+          if-no-files-found: ignore
+          retention-days: 7
+
+      - name: Remove this run's VM runtime and engine fixtures
+        if: always()
+        run: rm -rf "${{ runner.temp }}/quarshell-vm-runtime"
