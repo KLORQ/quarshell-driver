@@ -1,0 +1,226 @@
+# SPDX-FileCopyrightText: Copyright (c) 2026 the cautem authors
+# SPDX-License-Identifier: Apache-2.0
+name: Podman Rootless E2E
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  podman-rootless-recovery:
+    name: Podman E2E (rootless, 6.1.4)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: quarshell-driver
+    steps:
+      - name: Checkout driver
+        uses: actions/checkout@v4
+        with:
+          path: quarshell-driver
+      - name: Checkout core
+        uses: actions/checkout@v4
+        with:
+          repository: KLORQ/quarshell-core
+          ref: v0.4.1
+          path: quarshell-core
+      - name: Checkout quarshell-proto workspace dependency
+        uses: actions/checkout@v4
+        with:
+          repository: KLORQ/quarshell-proto
+          ref: v0.2.2
+          path: quarshell-proto
+      - name: Checkout quarshell-proxy workspace dependency
+        uses: actions/checkout@v4
+        with:
+          repository: KLORQ/quarshell-proxy
+          ref: v0.1.0
+          path: quarshell-proxy
+      - name: Checkout quarshell-slogx workspace dependency
+        uses: actions/checkout@v4
+        with:
+          repository: KLORQ/quarshell-slogx
+          ref: v0.1.5
+          path: quarshell-slogx
+      - name: Configure Go workspace
+        working-directory: ${{ github.workspace }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          workspace="$GITHUB_WORKSPACE"
+          {
+            echo 'go 1.27.0'
+            echo 'use ('
+            modules=()
+            for d in "$workspace"/quarshell-*; do
+              [[ -f "$d/go.mod" ]] && modules+=("${d##*/}")
+            done
+            for d in "${modules[@]}"; do echo "  ./$d"; done
+            echo ')'
+            echo 'replace ('
+            for d in "${modules[@]}"; do
+              module="$(sed -n 's/^module[[:space:]][[:space:]]*//p' "$workspace/$d/go.mod" | head -n 1)"
+              [[ -n "$module" ]] || continue
+              for source in "${modules[@]}"; do
+                awk -v module="$module" '$1 == module && $2 ~ /^v[0-9]/ { print $2 }; $1 == "require" && $2 == module && $3 ~ /^v[0-9]/ { print $3 }' "$workspace/$source/go.mod"
+              done | sort -u | while IFS= read -r version; do
+                printf '  %s %s => ./%s\n' "$module" "$version" "$d"
+              done
+            done
+          } > "$workspace/go.work"
+          echo "Wrote go.work:" && cat "$workspace/go.work"
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.27.2"
+          cache: true
+          cache-dependency-path: |
+            quarshell-driver/go.sum
+            quarshell-core/go.sum
+      - name: Build official Podman 6 E2E image
+        env:
+          CAUTEM_PODMAN_FIXTURE_DIGEST_FILE: ${{ runner.temp }}/podman6-fixture-image-id.txt
+        run: ./scripts/build-podman6-fixture.sh cautem-podman6-e2e:local
+      - name: Build rootless Podman E2E binary
+        run: CGO_ENABLED=0 go test -c -o "$RUNNER_TEMP/podman-rootless.test" ./tests/e2e/podman
+      - name: Start isolated rootless Podman service
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker run -d --name cautem-podman-rootless --privileged --device /dev/fuse \
+            --security-opt label=disable -e STORAGE_DRIVER=vfs \
+            -p 127.0.0.1:18501:18501 cautem-podman6-e2e:local \
+            sh -lc '
+              id podman >/dev/null 2>&1 || useradd --create-home --uid 1000 podman
+              sed -i "/^podman:/d" /etc/subuid /etc/subgid
+              printf "podman:200000:65536\\n" >> /etc/subuid
+              printf "podman:200000:65536\\n" >> /etc/subgid
+              mkdir -p /run/user/1000 /tmp/cautem-rootless-workspace
+              chown -R podman:podman /run/user/1000 /tmp/cautem-rootless-workspace
+              chmod 700 /run/user/1000
+              touch /tmp/cautem-rootless-ready
+              exec sleep infinity
+            ' >/dev/null
+          ready=0
+          for _ in $(seq 1 30); do
+            if docker exec cautem-podman-rootless test -f /tmp/cautem-rootless-ready; then
+              ready=1
+              break
+            fi
+            sleep 1
+          done
+          if [[ "$ready" != "1" ]]; then
+            docker logs cautem-podman-rootless >&2
+            exit 1
+          fi
+          docker exec --user podman -d \
+            -e HOME=/home/podman -e XDG_RUNTIME_DIR=/run/user/1000 \
+            -e STORAGE_DRIVER=vfs cautem-podman-rootless \
+            sh -lc 'while true; do podman system service --time=0 tcp:0.0.0.0:18501 >>/tmp/podman-rootless-service.log 2>&1 & pid=$!; echo "$pid" >/tmp/podman-rootless-service.pid; wait "$pid"; sleep 2; done'
+          ready=0
+          for _ in $(seq 1 90); do
+            if curl --fail --silent http://127.0.0.1:18501/_ping >/dev/null; then
+              ready=1
+              break
+            fi
+            sleep 1
+          done
+          if [[ "$ready" != "1" ]]; then
+            docker logs cautem-podman-rootless >&2
+            docker exec cautem-podman-rootless cat /tmp/podman-rootless-service.log >&2 || true
+            exit 1
+          fi
+          version="$(docker exec --user podman -e HOME=/home/podman -e XDG_RUNTIME_DIR=/run/user/1000 cautem-podman-rootless podman --version)"
+          if [[ "$version" != "podman version 6.1.4" ]]; then
+            echo "required Podman version is 6.1.4; found $version" >&2
+            exit 1
+          fi
+          docker exec --user podman -e HOME=/home/podman -e XDG_RUNTIME_DIR=/run/user/1000 \
+            cautem-podman-rootless podman pull registry.fedoraproject.org/fedora:45
+          docker cp "$RUNNER_TEMP/podman-rootless.test" cautem-podman-rootless:/tmp/podman-rootless.test
+      - name: Run required rootless service recovery scenario
+        shell: bash
+        run: |
+          set -euo pipefail
+          log="$RUNNER_TEMP/podman-rootless-e2e.log"
+          docker exec --user podman \
+            -e HOME=/home/podman \
+            -e XDG_RUNTIME_DIR=/run/user/1000 \
+            -e STORAGE_DRIVER=vfs \
+            -e DOCKER_HOST=tcp://127.0.0.1:18501 \
+            -e CAUTEM_PODMAN_ROOTLESS=1 \
+            -e CAUTEM_PODMAN_WORKSPACE=/tmp/cautem-rootless-workspace \
+            -e CAUTEM_E2E_SANDBOX_IMAGE=registry.fedoraproject.org/fedora:45 \
+            cautem-podman-rootless /tmp/podman-rootless.test \
+            -test.run '^TestPodmanRootlessServiceRecovery$' -test.count=1 -test.v 2>&1 | tee "$log"
+          grep -F -- '--- PASS: TestPodmanRootlessServiceRecovery' "$log" >/dev/null
+      - name: Run required rootless driver lifecycle
+        shell: bash
+        run: |
+          set -euo pipefail
+          log="$RUNNER_TEMP/podman-rootless-lifecycle.log"
+          docker exec --user podman \
+            -e HOME=/home/podman \
+            -e XDG_RUNTIME_DIR=/run/user/1000 \
+            -e STORAGE_DRIVER=vfs \
+            -e DOCKER_HOST=tcp://127.0.0.1:18501 \
+            -e CAUTEM_PODMAN_ROOTLESS=1 \
+            -e CAUTEM_PODMAN_WORKSPACE=/tmp/cautem-rootless-workspace \
+            -e CAUTEM_E2E_SANDBOX_IMAGE=registry.fedoraproject.org/fedora:45 \
+            cautem-podman-rootless /tmp/podman-rootless.test \
+            -test.run '^TestPodmanRootlessDriverLifecycle$' -test.count=1 -test.v 2>&1 | tee "$log"
+          grep -F -- '--- PASS: TestPodmanRootlessDriverLifecycle' "$log" >/dev/null
+      - name: Run rootless user namespace matrix
+        shell: bash
+        run: |
+          set -euo pipefail
+          log="$RUNNER_TEMP/podman-rootless-userns.log"
+          version="$(docker exec --user podman -e HOME=/home/podman -e XDG_RUNTIME_DIR=/run/user/1000 cautem-podman-rootless podman --version)"
+          if [[ "$version" != "podman version 6.1.4" ]]; then
+            echo "required Podman version is 6.1.4; found $version" >&2
+            exit 1
+          fi
+          docker exec --user podman \
+            -e HOME=/home/podman \
+            -e XDG_RUNTIME_DIR=/run/user/1000 \
+            -e STORAGE_DRIVER=vfs \
+            -e DOCKER_HOST=tcp://127.0.0.1:18501 \
+            -e CAUTEM_PODMAN_ROOTLESS=1 \
+            -e CAUTEM_PODMAN_USERNS_E2E=1 \
+            -e CAUTEM_PODMAN_USERNS_STRICT=1 \
+            -e CAUTEM_PODMAN_WORKSPACE=/tmp/cautem-rootless-workspace \
+            -e CAUTEM_E2E_SANDBOX_IMAGE=registry.fedoraproject.org/fedora:45 \
+            cautem-podman-rootless /tmp/podman-rootless.test \
+            -test.run '^TestPodmanUsernsMatrixE2E$' -test.count=1 -test.v 2>&1 | tee "$log"
+          grep -F -- '--- PASS: TestPodmanUsernsMatrixE2E' "$log" >/dev/null
+          grep -F -- '--- PASS: TestPodmanUsernsMatrixE2E/auto' "$log" >/dev/null
+          grep -F -- '--- PASS: TestPodmanUsernsMatrixE2E/host' "$log" >/dev/null
+          grep -F -- '--- PASS: TestPodmanUsernsMatrixE2E/keep-id' "$log" >/dev/null
+          grep -F -- '--- PASS: TestPodmanUsernsMatrixE2E/no-map' "$log" >/dev/null
+          grep -F -- '--- SKIP: TestPodmanUsernsMatrixE2E/private' "$log" >/dev/null
+          grep -F -- 'expected capability skip: rootless Podman does not accept explicit private ID maps' "$log" >/dev/null
+          {
+            echo "### Podman rootless behavioral E2E"
+            echo "- Engine: rootless $version from Fedora 45 in a disposable privileged container"
+            echo "- Fixture image ID: $(cat "$RUNNER_TEMP/podman6-fixture-image-id.txt")"
+            echo "- Required tests passed: keep-id driver lifecycle with host UID preservation, service recovery, and rootless userns auto/host/keep-id/no-map modes"
+          } >> "$GITHUB_STEP_SUMMARY"
+      - name: Upload Podman fixture image ID evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: podman6-fixture-image-id-rootless-${{ github.run_id }}
+          path: ${{ runner.temp }}/podman6-fixture-image-id.txt
+          if-no-files-found: ignore
+          retention-days: 7
+      - name: Dump rootless Podman logs on failure
+        if: failure()
+        run: docker exec cautem-podman-rootless sh -lc 'cat /tmp/podman-rootless-service.log 2>/dev/null || true; podman --version 2>/dev/null || true' || true
+      - name: Remove disposable Podman service
+        if: always()
+        run: docker rm -f cautem-podman-rootless || true

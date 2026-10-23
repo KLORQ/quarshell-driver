@@ -1,0 +1,596 @@
+package docker_test
+
+import (
+	"bytes"
+	"context"
+	"fmt"
+	"io"
+	"net"
+	"net/netip"
+	"os"
+	"os/exec"
+	"path/filepath"
+	"slices"
+	"strconv"
+	"strings"
+	"testing"
+	"time"
+
+	"github.com/KLORQ/quarshell-core"
+	"github.com/KLORQ/quarshell-core/resourceadmission"
+	"github.com/KLORQ/quarshell-driver/driver"
+	docker "github.com/KLORQ/quarshell-driver/internal/docker"
+	"github.com/moby/moby/api/types/container"
+	"github.com/moby/moby/client"
+)
+
+// TestDockerEngineE2E exercises the Docker driver lifecycle against the
+// disposable Docker-in-Docker daemon started by tools/e2e/docker.sh.
+func TestDockerEngineE2E(t *testing.T) {
+	if os.Getenv("CAUTEM_DOCKER_E2E") != "1" {
+		t.Skip("set CAUTEM_DOCKER_E2E=1 to run against a disposable Docker daemon")
+	}
+	workspace := strings.TrimSpace(os.Getenv("CAUTEM_DOCKER_WORKSPACE"))
+	if workspace == "" {
+		t.Fatal("CAUTEM_DOCKER_WORKSPACE must name a directory visible to the Docker daemon")
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+	defer cancel()
+	image := strings.TrimSpace(os.Getenv("CAUTEM_E2E_SANDBOX_IMAGE"))
+	if image == "" {
+		image = "localhost/cautem-connect-e2e:latest"
+	}
+	helperDir := strings.TrimSpace(os.Getenv("CAUTEM_HELPERS_DIR"))
+	proxyBin := filepath.Join(helperDir, "cautem")
+	proxyImage := strings.TrimSpace(os.Getenv("CAUTEM_PROXY_IMAGE"))
+	policyPath := filepath.Join(workspace, "docker-driver-deny-policy.yaml")
+	if helperDir == "" || proxyImage == "" {
+		t.Fatal("CAUTEM_HELPERS_DIR and CAUTEM_PROXY_IMAGE are required for policy E2E")
+	}
+	if err := os.WriteFile(policyPath, []byte("version: 1\nnetwork_policies: {}\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	bindSource := filepath.Join(workspace, "docker-driver-config-bind")
+	if err := os.MkdirAll(bindSource, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chmod(bindSource, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(bindSource, "marker"), []byte("bind-ok"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	cli, err := client.New(client.FromEnv)
+	if err != nil {
+		t.Fatal(err)
+	}
+	engine := docker.NewFromClientWithRuntimeConfig(cli, docker.RuntimeConfig{
+		ImagePullPolicy:   "missing",
+		NetworkName:       "cautem-docker-driver-e2e",
+		EnableBindMounts:  true,
+		AllowDriverConfig: true,
+		// This lifecycle fixture exercises bind-mount handling. Production
+		// admission-enabled profiles reject bind mounts without label proof.
+		ResourceAdmission: &resourceadmission.Config{Enabled: false},
+	})
+	defer engine.Close()
+	partialName := "docker-partial-failure"
+	if _, err := engine.Create(ctx, backendRequestFromSpec(sandboxFixtureSpec{
+		Name: partialName, Image: image, Workspace: workspace,
+		ProxyBin: filepath.Join(workspace, "missing-proxy-binary"), ProxyImage: proxyImage, PolicyPath: policyPath,
+	})); err == nil {
+		t.Fatal("partial create with missing proxy binary unexpectedly succeeded")
+	}
+	if _, err := cli.NetworkInspect(ctx, "cautem-docker-driver-e2e-"+partialName, client.NetworkInspectOptions{}); err == nil {
+		t.Fatal("partial proxy create left its isolated network behind")
+	}
+	if _, err := cli.VolumeInspect(ctx, "cautem-ca-"+partialName, client.VolumeInspectOptions{}); err == nil {
+		t.Fatal("partial proxy create left its CA volume behind")
+	}
+	policyNetwork := fmt.Sprintf("cautem-docker-policy-e2e-%d", time.Now().UnixNano())
+	if _, err := cli.NetworkCreate(ctx, policyNetwork, client.NetworkCreateOptions{Driver: "bridge", Internal: true, Labels: map[string]string{"cautem": "policy-e2e"}}); err != nil {
+		t.Fatalf("create proxy-isolated network: %v", err)
+	}
+	defer func() { _, _ = cli.NetworkRemove(context.Background(), policyNetwork, client.NetworkRemoveOptions{}) }()
+	policyNetworkInfo, err := cli.NetworkInspect(ctx, policyNetwork, client.NetworkInspectOptions{})
+	if err != nil || !policyNetworkInfo.Network.Internal {
+		t.Fatalf("proxy policy network inspect internal=%t err=%v; want internal network", policyNetworkInfo.Network.Internal, err)
+	}
+
+	runID := time.Now().UnixNano()
+	name := fmt.Sprintf("docker-e2e-%d", runID)
+	volumeName := fmt.Sprintf("cautem-docker-e2e-cache-%d", runID)
+	if _, err := cli.VolumeCreate(ctx, client.VolumeCreateOptions{Name: volumeName}); err != nil {
+		t.Fatalf("create caller volume fixture: %v", err)
+	}
+	handle, err := engine.Create(ctx, backendRequestFromSpec(sandboxFixtureSpec{
+		Name: name, Image: image, Workspace: workspace,
+		Command:  []string{"/bin/sh", "-c", "echo cautem-docker-e2e-ready; sleep 300"},
+		NoHarden: true, PersistVolume: true, CPU: 0.5, MemoryBytes: 256 << 20, PidsLimit: 128,
+		ProxyBin: proxyBin, ProxyImage: proxyImage, PolicyPath: policyPath,
+		DriverConfigJSON: fmt.Sprintf(`{"mounts":[{"type":"bind","source":%s,"target":"/openshell-bind","read_only":true},{"type":"volume","source":%s,"target":"/openshell-volume","read_only":false},{"type":"tmpfs","target":"/openshell-tmpfs","read_only":false,"size_bytes":4096,"mode":448}]}`, strconv.Quote(bindSource), strconv.Quote(volumeName)),
+	}))
+	if err != nil {
+		t.Fatalf("create sandbox through Docker Engine API: %v", err)
+	}
+	deleted := false
+	defer func() {
+		if deleted {
+			return
+		}
+		cleanupCtx, cleanupCancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cleanupCancel()
+		if err := engine.Delete(cleanupCtx, handle.ID); err != nil {
+			t.Errorf("delete sandbox: %v", err)
+		}
+		_, _ = cli.VolumeRemove(cleanupCtx, volumeName, client.VolumeRemoveOptions{Force: true})
+	}()
+	imageInfo, err := cli.ImageInspect(ctx, image)
+	if err != nil {
+		t.Fatalf("inspect pinned image: %v", err)
+	}
+	if err := engine.Start(ctx, handle.ID); err != nil {
+		t.Fatalf("start sandbox: %v", err)
+	}
+	terminal, err := engine.OpenExecTerminal(ctx, handle.ID, driver.ExecTerminalRequest{
+		Argv: []string{"sh", "-c", `printf 'ready\n'; read line; printf 'interactive:%s\n' "$line"`}, Columns: 100, Rows: 40,
+	})
+	if err != nil {
+		t.Fatalf("open interactive exec terminal: %v", err)
+	}
+	defer terminal.Close()
+	if err := terminal.Resize(ctx, 120, 50); err != nil {
+		t.Fatalf("resize interactive exec terminal: %v", err)
+	}
+	if _, err := terminal.Write([]byte("interactive-e2e\n")); err != nil {
+		t.Fatalf("write interactive exec stdin: %v", err)
+	}
+	stdinCloser, ok := terminal.(driver.ExecTerminalInputCloser)
+	if !ok {
+		t.Fatal("interactive exec terminal cannot signal stdin EOF")
+	}
+	if err := stdinCloser.CloseStdin(); err != nil {
+		t.Fatalf("close interactive exec stdin: %v", err)
+	}
+	terminalOutput, err := io.ReadAll(terminal)
+	readErr := err
+	terminalExit, err := terminal.Wait(ctx)
+	if err != nil || terminalExit != 0 {
+		t.Fatalf("interactive exec exit = %d, %v; want 0", terminalExit, err)
+	}
+	if readErr != nil || !strings.Contains(string(terminalOutput), "ready") || !strings.Contains(string(terminalOutput), "interactive:interactive-e2e") {
+		t.Fatalf("interactive exec output = %q, %v", terminalOutput, readErr)
+	}
+	assertDockerPlatformExecEvent(t, ctx, engine, handle.ID, name)
+	probeTarget, closeProbeTarget := startPolicyProbeTarget(t, ctx, cli, image)
+	defer closeProbeTarget()
+	targetHost, targetPort, err := net.SplitHostPort(probeTarget)
+	if err != nil {
+		t.Fatal(err)
+	}
+	upstreamProxyID, upstreamProxyAddr := startUpstreamProxy(t, ctx, cli, image)
+	defer func() {
+		cleanupCtx, cleanupCancel := context.WithTimeout(context.Background(), 15*time.Second)
+		defer cleanupCancel()
+		_, _ = cli.ContainerRemove(cleanupCtx, upstreamProxyID, client.ContainerRemoveOptions{Force: true})
+	}()
+	upstreamAuth := filepath.Join(workspace, "docker-upstream-proxy-auth")
+	if err := os.WriteFile(upstreamAuth, []byte("robot:s3cret"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	upstreamPolicy := filepath.Join(workspace, "docker-upstream-proxy-policy.yaml")
+	if err := os.WriteFile(upstreamPolicy, []byte(fmt.Sprintf("version: 1\nnetwork_policies:\n  upstream:\n    endpoints:\n      - host: %s\n        port: %s\n", targetHost, targetPort)), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	upstreamEngine := docker.NewFromClientWithRuntimeConfig(cli, docker.RuntimeConfig{
+		ImagePullPolicy:                "missing",
+		NetworkName:                    "cautem-docker-upstream-e2e",
+		EnableBindMounts:               true,
+		UpstreamProxyURL:               "http://" + upstreamProxyAddr,
+		UpstreamProxyAuthFile:          upstreamAuth,
+		UpstreamProxyAuthAllowInsecure: true,
+	})
+	upstreamName := fmt.Sprintf("docker-upstream-%d", time.Now().UnixNano())
+	upstreamHandle, err := upstreamEngine.Create(ctx, backendRequestFromSpec(sandboxFixtureSpec{
+		Name: upstreamName, Image: image, Workspace: workspace, Command: []string{"sleep", "300"},
+		NoHarden: true, ProxyBin: proxyBin, ProxyImage: proxyImage, PolicyPath: upstreamPolicy,
+	}))
+	if err != nil {
+		t.Fatalf("create upstream-proxy sandbox: %v", err)
+	}
+	defer func() {
+		cleanupCtx, cleanupCancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cleanupCancel()
+		_ = upstreamEngine.Delete(cleanupCtx, upstreamHandle.ID)
+	}()
+	if err := upstreamEngine.Start(ctx, upstreamHandle.ID); err != nil {
+		t.Fatalf("start upstream-proxy sandbox: %v", err)
+	}
+	upstreamProxyInfo, err := cli.ContainerInspect(ctx, "quarshell-proxy-"+upstreamName, client.ContainerInspectOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !slices.Contains(upstreamProxyInfo.Container.Config.Env, "CAUTEM_PROXY_AUTH_FILE=/run/cautem/upstream-proxy/auth") || !slices.Contains(upstreamProxyInfo.Container.HostConfig.Binds, upstreamAuth+":/run/cautem/upstream-proxy/auth:ro") {
+		t.Fatalf("upstream proxy auth wiring missing: env=%v binds=%v", upstreamProxyInfo.Container.Config.Env, upstreamProxyInfo.Container.HostConfig.Binds)
+	}
+	result, err := upstreamEngine.Exec(ctx, core.ID(upstreamProxyInfo.Container.ID), driver.ExecRequest{Argv: []string{"/usr/local/bin/cautem-tcp-echo", "probe-connect-status", probeTarget, "200"}})
+	if err != nil || result.ExitCode != 0 {
+		logs, _ := cli.ContainerLogs(ctx, upstreamProxyID, client.ContainerLogsOptions{ShowStdout: true, ShowStderr: true, Tail: "20"})
+		var logBuf bytes.Buffer
+		if logs != nil {
+			_, _ = io.Copy(&logBuf, logs)
+			_ = logs.Close()
+		}
+		t.Fatalf("authenticated upstream proxy CONNECT result=%+v err=%v logs=%q", result, err, logBuf.String())
+	}
+	proxyNetwork, err := cli.NetworkInspect(ctx, "cautem-docker-driver-e2e-"+name, client.NetworkInspectOptions{})
+	if err != nil || !proxyNetwork.Network.Internal || !proxyNetwork.Network.EnableIPv6 || proxyNetwork.Network.Options["com.docker.network.bridge.gateway_mode_ipv4"] != "isolated" || proxyNetwork.Network.Options["com.docker.network.bridge.gateway_mode_ipv6"] != "isolated" {
+		t.Fatalf("actual Docker sandbox network internal=%v enableIPv6=%v options=%v err=%v; want isolated dual-stack internal gateway", proxyNetwork.Network.Internal, proxyNetwork.Network.EnableIPv6, proxyNetwork.Network.Options, err)
+	}
+	var ipv4Subnet, ipv6Subnet netip.Prefix
+	for _, config := range proxyNetwork.Network.IPAM.Config {
+		if !config.Subnet.IsValid() {
+			continue
+		}
+		if config.Subnet.Addr().Is4() {
+			ipv4Subnet = config.Subnet
+		} else if config.Subnet.Addr().Is6() {
+			ipv6Subnet = config.Subnet
+		}
+	}
+	if !ipv4Subnet.IsValid() || !ipv6Subnet.IsValid() {
+		t.Fatalf("isolated dual-stack network IPAM subnets = %v; want IPv4 and IPv6", proxyNetwork.Network.IPAM.Config)
+	}
+	// Isolated mode deliberately has no assigned gateway address; probe the
+	// conventional first subnet address where a bridge gateway would normally sit.
+	hostGatewayTarget, closeHostGateway := startHostGatewayProbeTarget(t, ctx, cli, image, ipv4Subnet.Masked().Addr().Next().String())
+	defer closeHostGateway()
+	containerInfo, err := cli.ContainerInspect(ctx, string(handle.ID), client.ContainerInspectOptions{})
+	if err != nil {
+		t.Fatalf("inspect sandbox network endpoints: %v", err)
+	}
+	endpoint := containerInfo.Container.NetworkSettings.Networks[proxyNetwork.Network.Name]
+	if endpoint == nil || !endpoint.GlobalIPv6Address.IsValid() {
+		t.Fatalf("sandbox IPv6 address on isolated network = %v; want an assigned IPv6 address", endpoint)
+	}
+	hostGatewayIPv6Target, closeHostGatewayIPv6 := startHostGatewayIPv6ProbeTarget(t, ctx, ipv6Subnet, proxyNetwork.Network.ID)
+	defer closeHostGatewayIPv6()
+	proxyInfo, err := cli.ContainerInspect(ctx, "quarshell-proxy-"+name, client.ContainerInspectOptions{})
+	if err != nil {
+		t.Fatalf("inspect Docker policy proxy sidecar: %v", err)
+	}
+	for _, probe := range [][]string{{"probe-tcp", probeTarget}, {"probe-udp", strings.TrimSuffix(probeTarget, ":17777") + ":17778"}} {
+		result, err := engine.Exec(ctx, core.ID(proxyInfo.Container.ID), driver.ExecRequest{Argv: append([]string{"/usr/local/bin/cautem-tcp-echo"}, probe...)})
+		if err != nil || result.ExitCode != 2 {
+			t.Fatalf("policy sidecar could not reach control listener via bridge: probe=%v exit=%d err=%v", probe, result.ExitCode, err)
+		}
+	}
+	for _, probe := range [][]string{
+		{"probe-connect", probeTarget},
+		{"probe-tcp", probeTarget},
+		{"probe-udp", strings.TrimSuffix(probeTarget, ":17777") + ":17778"},
+	} {
+		result, err := engine.Exec(ctx, handle.ID, driver.ExecRequest{Argv: append([]string{"/usr/local/bin/cautem-tcp-echo"}, probe...)})
+		if err != nil || result.ExitCode != 0 {
+			t.Fatalf("network policy probe %v exit=%d err=%v; want denied", probe, result.ExitCode, err)
+		}
+	}
+	if result, err := engine.Exec(ctx, handle.ID, driver.ExecRequest{Argv: []string{"/usr/local/bin/cautem-tcp-echo", "probe-tcp", hostGatewayTarget}}); err != nil || result.ExitCode != 0 {
+		t.Fatalf("sandbox reached host gateway directly at %s: result=%+v err=%v", hostGatewayTarget, result, err)
+	}
+	if result, err := engine.Exec(ctx, handle.ID, driver.ExecRequest{Argv: []string{"/usr/local/bin/cautem-tcp-echo", "probe-tcp", hostGatewayIPv6Target}}); err != nil || result.ExitCode != 0 {
+		t.Fatalf("sandbox reached host IPv6 gateway directly at %s: result=%+v err=%v", hostGatewayIPv6Target, result, err)
+	}
+	info, err := engine.Inspect(ctx, string(handle.ID))
+	if err != nil {
+		t.Fatalf("inspect sandbox: %v", err)
+	}
+	if !strings.Contains(strings.ToLower(info.Status), "running") && !strings.Contains(strings.ToLower(info.Status), "up") {
+		t.Fatalf("sandbox status = %q, want running", info.Status)
+	}
+	inspected, err := cli.ContainerInspect(ctx, string(handle.ID), client.ContainerInspectOptions{})
+	if err != nil {
+		t.Fatalf("inspect Docker template effects: %v", err)
+	}
+	host := inspected.Container.HostConfig
+	if host == nil || len(host.Mounts) != 2 || !strings.Contains(strings.Join(host.Binds, "\n"), ":/openshell-bind:ro") || !slices.Contains(host.SecurityOpt, "no-new-privileges:true") || !slices.Contains(host.CapDrop, "CAP_NET_RAW") {
+		t.Fatalf("Docker template mount/security effects missing: %+v", inspected.Container.HostConfig)
+	}
+	if host.NanoCPUs != 500_000_000 || host.Memory != 256<<20 || host.PidsLimit == nil || *host.PidsLimit != 128 {
+		t.Fatalf("Docker resource limits did not reach Engine create: nano_cpus=%d memory=%d pids=%v", host.NanoCPUs, host.Memory, host.PidsLimit)
+	}
+	if inspected.Container.Image != imageInfo.ID {
+		t.Fatalf("container image ID=%q, inspected image ID=%q; create must pin immutable image identity", inspected.Container.Image, imageInfo.ID)
+	}
+	command := `set -eu
+test "$(id -u)" = 1000
+grep -q '^NoNewPrivs:[[:space:]]*1$' /proc/self/status
+test "$(cat /openshell-bind/marker)" = bind-ok
+if touch /openshell-bind/write-denied 2>/dev/null; then exit 41; fi
+printf persisted > /cautem/data/persisted
+printf volume > /openshell-volume/persisted
+test "$(stat -c %a /openshell-tmpfs)" = 700
+cap=$(awk '/^CapBnd:/ {print $2}' /proc/self/status)
+[ $((0x$cap & 0x2000)) -eq 0 ]`
+	result, err = engine.Exec(ctx, handle.ID, driver.ExecRequest{Argv: []string{"/bin/sh", "-c", command}})
+	if err != nil {
+		t.Fatalf("exec in sandbox: %v", err)
+	}
+	if result.ExitCode != 0 {
+		t.Fatalf("exec exit code = %d, want 0", result.ExitCode)
+	}
+	if err := engine.Stop(ctx, handle.ID); err != nil {
+		t.Fatalf("stop sandbox: %v", err)
+	}
+	if err := engine.Start(ctx, handle.ID); err != nil {
+		t.Fatalf("restart sandbox: %v", err)
+	}
+	result, err = engine.Exec(ctx, handle.ID, driver.ExecRequest{Argv: []string{"/bin/sh", "-c", `set -eu; test "$(cat /cautem/data/persisted)" = persisted; test "$(cat /openshell-volume/persisted)" = volume; test "$(stat -c %a /openshell-tmpfs)" = 700`}})
+	if err != nil || result.ExitCode != 0 {
+		t.Fatalf("stop/start persistence and tmpfs reset: result=%+v err=%v", result, err)
+	}
+	var logs bytes.Buffer
+	if err := engine.Logs(ctx, handle.ID, false, &logs); err != nil || !strings.Contains(logs.String(), "cautem-docker-e2e-ready") {
+		t.Fatalf("sandbox logs=%q err=%v, expected readiness marker", logs.String(), err)
+	}
+	if err := engine.Stop(ctx, handle.ID); err != nil {
+		t.Fatalf("stop restarted sandbox: %v", err)
+	}
+	if err := engine.Delete(ctx, handle.ID); err != nil {
+		t.Fatalf("delete sandbox: %v", err)
+	}
+	deleted = true
+	if _, err := cli.ContainerInspect(ctx, string(handle.ID), client.ContainerInspectOptions{}); err == nil {
+		t.Fatalf("container %s still exists after delete", handle.ID)
+	}
+	if _, err := cli.VolumeRemove(ctx, volumeName, client.VolumeRemoveOptions{Force: true}); err != nil {
+		t.Errorf("remove E2E named volume: %v", err)
+	}
+}
+
+func assertDockerPlatformExecEvent(t *testing.T, ctx context.Context, backend *docker.Driver, sandboxID core.ID, sandboxName string) {
+	t.Helper()
+	eventCtx, cancel := context.WithCancel(ctx)
+	defer cancel()
+	events, err := backend.WatchPlatformEvents(eventCtx, driver.PlatformEventWatchRequest{SandboxID: sandboxID, SandboxName: sandboxName})
+	if err != nil {
+		t.Fatalf("watch Docker platform events: %v", err)
+	}
+	result, err := backend.Exec(ctx, sandboxID, driver.ExecRequest{Argv: []string{"/bin/true"}})
+	if err != nil || result.ExitCode != 0 {
+		t.Fatalf("trigger Docker platform event: result=%+v err=%v", result, err)
+	}
+	deadline := time.NewTimer(10 * time.Second)
+	defer deadline.Stop()
+	for {
+		select {
+		case result, ok := <-events:
+			if !ok {
+				t.Fatal("Docker platform event stream closed before exec event")
+			}
+			if result.Err != nil {
+				t.Fatalf("Docker platform event stream: %v", result.Err)
+			}
+			if result.Event.SandboxID == sandboxID && result.Event.Reason == "exec_create" {
+				if result.Event.Source != "docker" || result.Event.Type != "container" || result.Event.Terminal {
+					t.Fatalf("Docker exec event = %#v", result.Event)
+				}
+				return
+			}
+		case <-deadline.C:
+			t.Fatal("timed out waiting for Docker exec platform event")
+		case <-ctx.Done():
+			t.Fatalf("Docker E2E context ended while waiting for platform event: %v", ctx.Err())
+		}
+	}
+}
+
+func startHostGatewayProbeTarget(t *testing.T, ctx context.Context, engine *client.Client, image, gateway string) (string, func()) {
+	t.Helper()
+	created, err := engine.ContainerCreate(ctx, client.ContainerCreateOptions{
+		Name:       "cautem-docker-host-gateway-probe-" + strconv.FormatInt(time.Now().UnixNano(), 10),
+		Config:     &container.Config{Image: image, User: "0", Entrypoint: []string{"/bin/sh"}, Cmd: []string{"-c", "/usr/local/bin/cautem-tcp-echo serve-tcp 0.0.0.0:17779 & wait"}},
+		HostConfig: &container.HostConfig{NetworkMode: "host"},
+	})
+	if err != nil {
+		t.Fatalf("create host-network policy probe: %v", err)
+	}
+	cleanup := func() {
+		cleanupCtx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+		defer cancel()
+		_, _ = engine.ContainerKill(cleanupCtx, created.ID, client.ContainerKillOptions{Signal: "KILL"})
+		_, _ = engine.ContainerRemove(cleanupCtx, created.ID, client.ContainerRemoveOptions{Force: true})
+	}
+	if _, err := engine.ContainerStart(ctx, created.ID, client.ContainerStartOptions{}); err != nil {
+		cleanup()
+		t.Fatalf("start host-network policy probe: %v", err)
+	}
+	deadline := time.Now().Add(5 * time.Second)
+	for time.Now().Before(deadline) {
+		if policyProbeContainerExit(ctx, engine, created.ID, "probe-tcp", "127.0.0.1:17779") == 2 {
+			return net.JoinHostPort(gateway, "17779"), cleanup
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
+	cleanup()
+	t.Fatal("host-network policy-probe listener did not become reachable")
+	return "", func() {}
+}
+
+func startHostGatewayIPv6ProbeTarget(t *testing.T, ctx context.Context, subnet netip.Prefix, networkID string) (string, func()) {
+	t.Helper()
+	if !subnet.IsValid() || !subnet.Addr().Is6() || len(networkID) < 12 {
+		t.Fatalf("invalid IPv6 host-gateway probe inputs: subnet=%v network_id=%q", subnet, networkID)
+	}
+	address := subnet.Masked().Addr().Next()
+	bridge := "br-" + networkID[:12]
+	disableIPv6Path := filepath.Join("/proc/sys/net/ipv6/conf", bridge, "disable_ipv6")
+	disableIPv6, err := os.ReadFile(disableIPv6Path)
+	if err != nil {
+		t.Fatalf("read isolated bridge IPv6 state: %v", err)
+	}
+	restoreDisabled := strings.TrimSpace(string(disableIPv6)) == "1"
+	if restoreDisabled {
+		if err := os.WriteFile(disableIPv6Path, []byte("0"), 0o644); err != nil {
+			t.Fatalf("temporarily enable IPv6 on isolated bridge %s for host-gateway probe: %v", bridge, err)
+		}
+	}
+	prefix := netip.PrefixFrom(address, subnet.Bits()).String()
+	runHostIP(t, ctx, "-6", "addr", "add", prefix, "dev", bridge, "nodad")
+	listener, err := net.Listen("tcp6", net.JoinHostPort(address.String(), "17780"))
+	if err != nil {
+		cleanupHostIPv6ProbeAddress(bridge, prefix, nil)
+		restoreHostBridgeIPv6(t, disableIPv6Path, restoreDisabled)
+		t.Fatalf("listen on isolated bridge IPv6 host address %s: %v", address, err)
+	}
+	cleanup := func() {
+		cleanupHostIPv6ProbeAddress(bridge, prefix, listener)
+		restoreHostBridgeIPv6(t, disableIPv6Path, restoreDisabled)
+	}
+	ready := false
+	defer func() {
+		if !ready {
+			cleanup()
+		}
+	}()
+	probe, err := net.DialTimeout("tcp6", net.JoinHostPort(address.String(), "17780"), time.Second)
+	if err != nil {
+		t.Fatalf("verify IPv6 host-gateway probe listener: %v", err)
+	}
+	_ = probe.Close()
+	ready = true
+	return net.JoinHostPort(address.String(), "17780"), cleanup
+}
+
+func restoreHostBridgeIPv6(t *testing.T, sysctlPath string, restore bool) {
+	t.Helper()
+	if restore {
+		if err := os.WriteFile(sysctlPath, []byte("1"), 0o644); err != nil && !os.IsNotExist(err) {
+			t.Errorf("restore isolated bridge IPv6-disabled state: %v", err)
+		}
+	}
+}
+
+func cleanupHostIPv6ProbeAddress(bridge, prefix string, listener net.Listener) {
+	if listener != nil {
+		_ = listener.Close()
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	command := exec.CommandContext(ctx, "ip", "-6", "addr", "del", prefix, "dev", bridge)
+	_, _ = command.CombinedOutput()
+}
+
+func runHostIP(t *testing.T, ctx context.Context, args ...string) {
+	t.Helper()
+	command := exec.CommandContext(ctx, "ip", args...)
+	output, err := command.CombinedOutput()
+	if err != nil {
+		t.Fatalf("ip %v: %v: %s", args, err, strings.TrimSpace(string(output)))
+	}
+}
+
+func startUpstreamProxy(t *testing.T, ctx context.Context, engine *client.Client, image string) (string, string) {
+	t.Helper()
+	created, err := engine.ContainerCreate(ctx, client.ContainerCreateOptions{
+		Name: "cautem-docker-upstream-proxy-" + strconv.FormatInt(time.Now().UnixNano(), 10),
+		Config: &container.Config{
+			Image: image, Entrypoint: []string{"/usr/local/bin/cautem-tcp-echo"},
+			Cmd: []string{"serve-proxy", "0.0.0.0:17880", "robot", "s3cret"},
+		},
+		HostConfig: &container.HostConfig{NetworkMode: "bridge"},
+	})
+	if err != nil {
+		t.Fatalf("create upstream proxy: %v", err)
+	}
+	if _, err := engine.ContainerStart(ctx, created.ID, client.ContainerStartOptions{}); err != nil {
+		_, _ = engine.ContainerRemove(context.Background(), created.ID, client.ContainerRemoveOptions{Force: true})
+		t.Fatalf("start upstream proxy: %v", err)
+	}
+	deadline := time.Now().Add(5 * time.Second)
+	for time.Now().Before(deadline) {
+		inspect, inspectErr := engine.ContainerInspect(ctx, created.ID, client.ContainerInspectOptions{})
+		if inspectErr == nil && inspect.Container.NetworkSettings != nil {
+			for _, network := range inspect.Container.NetworkSettings.Networks {
+				if network.IPAddress.IsValid() {
+					return created.ID, net.JoinHostPort(network.IPAddress.String(), "17880")
+				}
+			}
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
+	_, _ = engine.ContainerRemove(context.Background(), created.ID, client.ContainerRemoveOptions{Force: true})
+	t.Fatal("upstream proxy did not receive a bridge IP")
+	return "", ""
+}
+
+func startPolicyProbeTarget(t *testing.T, ctx context.Context, engine *client.Client, image string) (string, func()) {
+	t.Helper()
+	created, err := engine.ContainerCreate(ctx, client.ContainerCreateOptions{
+		Name: "cautem-docker-policy-probe-" + strconv.FormatInt(time.Now().UnixNano(), 10),
+		Config: &container.Config{
+			Image: image, User: "0", Entrypoint: []string{"/bin/sh"},
+			Cmd: []string{"-c", "/usr/local/bin/cautem-tcp-echo serve-tcp 0.0.0.0:17777 & /usr/local/bin/cautem-tcp-echo serve-udp 0.0.0.0:17778 & wait"},
+		},
+		HostConfig: &container.HostConfig{NetworkMode: "bridge"},
+	})
+	if err != nil {
+		t.Fatalf("create reachable policy-probe target on bridge: %v", err)
+	}
+	cleanup := func() {
+		cleanupCtx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+		defer cancel()
+		_, _ = engine.ContainerKill(cleanupCtx, created.ID, client.ContainerKillOptions{Signal: "KILL"})
+		_, _ = engine.ContainerRemove(cleanupCtx, created.ID, client.ContainerRemoveOptions{Force: true})
+	}
+	if _, err := engine.ContainerStart(ctx, created.ID, client.ContainerStartOptions{}); err != nil {
+		cleanup()
+		t.Fatalf("start reachable policy-probe target: %v", err)
+	}
+	deadline := time.Now().Add(5 * time.Second)
+	var address string
+	for time.Now().Before(deadline) {
+		inspect, inspectErr := engine.ContainerInspect(ctx, created.ID, client.ContainerInspectOptions{})
+		if inspectErr == nil && inspect.Container.NetworkSettings != nil {
+			for _, network := range inspect.Container.NetworkSettings.Networks {
+				if network.IPAddress.IsValid() {
+					address = net.JoinHostPort(network.IPAddress.String(), "17777")
+					break
+				}
+			}
+		}
+		if address != "" {
+			if policyProbeContainerExit(ctx, engine, created.ID, "probe-tcp", "127.0.0.1:17777") == 2 &&
+				policyProbeContainerExit(ctx, engine, created.ID, "probe-udp", "127.0.0.1:17778") == 2 {
+				return address, cleanup
+			}
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
+	cleanup()
+	t.Fatal("policy-probe TCP and UDP listeners did not become reachable")
+	return "", func() {}
+}
+
+func policyProbeContainerExit(ctx context.Context, engine *client.Client, containerID, mode, target string) int {
+	checkCtx, cancel := context.WithTimeout(ctx, 3*time.Second)
+	defer cancel()
+	created, err := engine.ExecCreate(checkCtx, containerID, client.ExecCreateOptions{
+		TTY: true, AttachStdout: true, AttachStderr: true,
+		Cmd: []string{"/usr/local/bin/cautem-tcp-echo", mode, target},
+	})
+	if err != nil {
+		return -1
+	}
+	attach, err := engine.ExecAttach(checkCtx, created.ID, client.ExecAttachOptions{TTY: true})
+	if err != nil {
+		return -1
+	}
+	_, _ = io.Copy(io.Discard, attach.Reader)
+	attach.Close()
+	result, err := engine.ExecInspect(checkCtx, created.ID, client.ExecInspectOptions{})
+	if err != nil {
+		return -1
+	}
+	return result.ExitCode
+}

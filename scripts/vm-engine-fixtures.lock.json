@@ -1,0 +1,7 @@
+{
+  "schema_version": 1,
+  "docker_dind": "docker:28.0.0-dind@sha256:0a9c58ebc9f86e5af35e4330f6c738dc64fce3ca2e2574b5becdfb88765b308b",
+  "docker_dind_version": "28.0.0",
+  "test_image": "docker.io/library/alpine:3.22@sha256:5291449c3df73caf6ed85e649dec1b9e818b39a5d8c871e97afc13e9cd5e8fa8",
+  "podman_legacy_negative": "quay.io/podman/stable:v5.8.7@sha256:2fb39ca923dd9e0ee33f9e319c3a107a2bfde022a6a31560cbd56a862821e7d3"
+}
