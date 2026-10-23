@@ -5,7 +5,7 @@ diagnostics. Unit tests for Docker/Podman request translation stay beside the
 implementation. Container-backed scenarios belong under `tests/e2e`.
 
 `tests/internal/testenv` provides the opt-in Alpine and isolated
-Docker-in-Docker fixtures. Enable them with `CAUTEM_TESTCONTAINERS=1`.
+Docker-in-Docker fixtures. Enable them with `QUARSHELL_TESTCONTAINERS=1`.
 
 From a native macOS ARM64 host with Docker Desktop running,
 `task e2e:docker-desktop` checks workspace bind reads/writes and stop/start

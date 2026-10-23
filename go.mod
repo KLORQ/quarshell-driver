@@ -2,10 +2,10 @@ module github.com/KLORQ/quarshell-driver
 
 go 1.27.0
 
-toolchain go1.27.2
+toolchain go1.27.3
 
 require (
-	github.com/KLORQ/quarshell-core v0.4.2
+	github.com/KLORQ/quarshell-core v0.5.0
 	github.com/containerd/errdefs v1.0.0
 	github.com/distribution/reference v0.6.0
 	github.com/docker/cli v29.9.0+incompatible

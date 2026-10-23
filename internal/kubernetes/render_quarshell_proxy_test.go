@@ -8,11 +8,11 @@ import (
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 )
 
-func TestRenderCautemProxyPodUsesSplitControlListenAndWorkloadTarget(t *testing.T) {
-	params := testCautemProxyPodRenderParams()
-	pod, err := renderCautemProxyPod(params)
+func TestRenderQuarshellProxyPodUsesSplitControlListenAndWorkloadTarget(t *testing.T) {
+	params := testQuarshellProxyPodRenderParams()
+	pod, err := renderQuarshellProxyPod(params)
 	if err != nil {
-		t.Fatalf("renderCautemProxyPod() error = %v", err)
+		t.Fatalf("renderQuarshellProxyPod() error = %v", err)
 	}
 	metadata := renderMap(t, pod["metadata"], "proxy metadata")
 	if metadata["name"] != "os-supervisor-sandbox-123" || metadata["namespace"] != params.Namespace {
@@ -38,16 +38,16 @@ func TestRenderCautemProxyPodUsesSplitControlListenAndWorkloadTarget(t *testing.
 	if security["runAsUser"] != params.ControlUID || security["runAsNonRoot"] != true || security["readOnlyRootFilesystem"] != true || security["allowPrivilegeEscalation"] != false {
 		t.Fatalf("proxy security context = %#v", security)
 	}
-	if hasEnv(container, "CAUTEM_SANDBOX_TOKEN") || !hasEnv(container, "CAUTEM_SANDBOX_TOKEN_FILE") {
+	if hasEnv(container, "QUARSHELL_SANDBOX_TOKEN") || !hasEnv(container, "QUARSHELL_SANDBOX_TOKEN_FILE") {
 		t.Fatalf("proxy token must be read from a Secret file: %#v", container["env"])
 	}
-	if !hasEnv(container, "CAUTEM_SUPERVISOR_CONTROL_LISTEN") || hasEnv(container, "CAUTEM_SUPERVISOR_CONTROL_ENDPOINT") {
+	if !hasEnv(container, "QUARSHELL_SUPERVISOR_CONTROL_LISTEN") || hasEnv(container, "QUARSHELL_SUPERVISOR_CONTROL_ENDPOINT") {
 		t.Fatalf("proxy must use a local listen address distinct from workload client endpoint: %#v", container["env"])
 	}
-	if got := renderEnvValue(t, container, "CAUTEM_RELAY_TARGET_ENDPOINT"); got != fmt.Sprintf("%s:%d", runtimeServiceFQDN("os-boundary-"+params.SandboxID, params.Namespace), params.BoundaryPort) {
+	if got := renderEnvValue(t, container, "QUARSHELL_RELAY_TARGET_ENDPOINT"); got != fmt.Sprintf("%s:%d", runtimeServiceFQDN("os-boundary-"+params.SandboxID, params.Namespace), params.BoundaryPort) {
 		t.Fatalf("relay target endpoint = %q", got)
 	}
-	for _, key := range []string{"CAUTEM_GUEST_TLS_CA", "CAUTEM_GUEST_TLS_CERT", "CAUTEM_GUEST_TLS_KEY"} {
+	for _, key := range []string{"QUARSHELL_GUEST_TLS_CA", "QUARSHELL_GUEST_TLS_CERT", "QUARSHELL_GUEST_TLS_KEY"} {
 		if !hasEnv(container, key) {
 			t.Fatalf("HTTPS proxy is missing guest TLS path %s", key)
 		}
@@ -65,27 +65,27 @@ func TestRenderCautemProxyPodUsesSplitControlListenAndWorkloadTarget(t *testing.
 	}
 }
 
-func TestCautemProxyPodIdentityVerifiesAdmittedContainerAndSecretReferences(t *testing.T) {
-	proxyParams := testCautemProxyPodRenderParams()
-	pod, err := renderCautemProxyPod(proxyParams)
+func TestQuarshellProxyPodIdentityVerifiesAdmittedContainerAndSecretReferences(t *testing.T) {
+	proxyParams := testQuarshellProxyPodRenderParams()
+	pod, err := renderQuarshellProxyPod(proxyParams)
 	if err != nil {
-		t.Fatalf("renderCautemProxyPod() error = %v", err)
+		t.Fatalf("renderQuarshellProxyPod() error = %v", err)
 	}
 	metadata := renderMap(t, pod["metadata"], "proxy metadata")
 	metadata["uid"] = "proxy-pod-uid"
 	identity := supervisorIdentityFromPod(&unstructured.Unstructured{Object: pod}, pod)
 	runtimeParams := testAgentSandboxRuntimeRenderParams()
-	runtimeParams.CautemProxyImage = proxyParams.ProxyImage
-	runtimeParams.CautemGatewayURL = proxyParams.GatewayURL
-	runtimeParams.CautemGatewayGRPCEndpoint = proxyParams.GatewayGRPCEndpoint
-	runtimeParams.CautemGatewayTLS = proxyParams.GatewayTLS
+	runtimeParams.QuarshellProxyImage = proxyParams.ProxyImage
+	runtimeParams.QuarshellGatewayURL = proxyParams.GatewayURL
+	runtimeParams.QuarshellGatewayGRPCEndpoint = proxyParams.GatewayGRPCEndpoint
+	runtimeParams.QuarshellGatewayTLS = proxyParams.GatewayTLS
 	if err := validateAgentSandboxSupervisorIdentity(identity, runtimeParams, proxyParams.SandboxResourceUID); err != nil {
 		t.Fatalf("validateAgentSandboxSupervisorIdentity() error = %v", err)
 	}
 
 	containers := renderList(t, renderMap(t, pod["spec"], "proxy spec")["containers"], "proxy containers")
 	container := renderMap(t, containers[0], "proxy container")
-	container["env"] = append(renderList(t, container["env"], "proxy env"), map[string]any{"name": "CAUTEM_SANDBOX_TOKEN", "value": "raw-token"})
+	container["env"] = append(renderList(t, container["env"], "proxy env"), map[string]any{"name": "QUARSHELL_SANDBOX_TOKEN", "value": "raw-token"})
 	metadata["uid"] = "proxy-pod-uid-2"
 	identity = supervisorIdentityFromPod(&unstructured.Unstructured{Object: pod}, pod)
 	if err := validateAgentSandboxSupervisorIdentity(identity, runtimeParams, proxyParams.SandboxResourceUID); err == nil {
@@ -93,36 +93,40 @@ func TestCautemProxyPodIdentityVerifiesAdmittedContainerAndSecretReferences(t *t
 	}
 }
 
-func TestRenderCautemProxyPodRejectsMutableImagesAndInvalidEndpoints(t *testing.T) {
+func TestRenderQuarshellProxyPodRejectsMutableImagesAndInvalidEndpoints(t *testing.T) {
 	tests := []struct {
 		name   string
-		mutate func(*cautemProxyPodRenderParams)
+		mutate func(*quarshellProxyPodRenderParams)
 	}{
-		{name: "mutable image", mutate: func(params *cautemProxyPodRenderParams) { params.ProxyImage = "ghcr.io/cautem/quarshell-proxy:latest" }},
-		{name: "malformed image digest", mutate: func(params *cautemProxyPodRenderParams) {
-			params.ProxyImage = "ghcr.io/cautem/quarshell-proxy@sha256:latest"
+		{name: "mutable image", mutate: func(params *quarshellProxyPodRenderParams) {
+			params.ProxyImage = "ghcr.io/quarshell/quarshell-proxy:latest"
 		}},
-		{name: "invalid gateway url", mutate: func(params *cautemProxyPodRenderParams) { params.GatewayURL = "https://user:secret@gateway.example" }},
-		{name: "invalid grpc endpoint", mutate: func(params *cautemProxyPodRenderParams) { params.GatewayGRPCEndpoint = "https://gateway.example:7443" }},
+		{name: "malformed image digest", mutate: func(params *quarshellProxyPodRenderParams) {
+			params.ProxyImage = "ghcr.io/quarshell/quarshell-proxy@sha256:latest"
+		}},
+		{name: "invalid gateway url", mutate: func(params *quarshellProxyPodRenderParams) { params.GatewayURL = "https://user:secret@gateway.example" }},
+		{name: "invalid grpc endpoint", mutate: func(params *quarshellProxyPodRenderParams) {
+			params.GatewayGRPCEndpoint = "https://gateway.example:7443"
+		}},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			params := testCautemProxyPodRenderParams()
+			params := testQuarshellProxyPodRenderParams()
 			test.mutate(&params)
-			if _, err := renderCautemProxyPod(params); err == nil {
-				t.Fatal("renderCautemProxyPod() succeeded; want validation error")
+			if _, err := renderQuarshellProxyPod(params); err == nil {
+				t.Fatal("renderQuarshellProxyPod() succeeded; want validation error")
 			}
 		})
 	}
 }
 
-func testCautemProxyPodRenderParams() cautemProxyPodRenderParams {
+func testQuarshellProxyPodRenderParams() quarshellProxyPodRenderParams {
 	namespace, _ := workspaceNamespaceName("gateway-1", "team-a")
-	return cautemProxyPodRenderParams{
+	return quarshellProxyPodRenderParams{
 		Namespace: namespace, SandboxResourceName: "team-a-demo",
 		SandboxResourceAPIVersion: sandboxAPIGroup + "/" + sandboxAPIVersionV1Beta1,
 		SandboxResourceUID:        "cr-uid-123", SandboxID: "sandbox-123", SandboxName: "demo", Generation: "gen7",
-		ProxyImage:         "ghcr.io/cautem/quarshell-proxy@sha256:" + strings.Repeat("a", 64),
+		ProxyImage:         "ghcr.io/quarshell/quarshell-proxy@sha256:" + strings.Repeat("a", 64),
 		ServiceAccountName: "sandbox-driver", ImagePullSecrets: []string{"registry-auth"},
 		GatewayURL: "https://gateway.example:443", GatewayGRPCEndpoint: "gateway.example:7443", GatewayTLS: true,
 		BoundaryPort: 5500, ControlUID: 10001, ControlGID: 10001,

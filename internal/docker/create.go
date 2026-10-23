@@ -88,7 +88,7 @@ func (d *Driver) createValidated(ctx context.Context, spec sandboxCreateSpec, va
 	ws := workspaceSource.Path
 	netPrefix := strings.TrimSpace(d.runtimeConfig.NetworkName)
 	if netPrefix == "" {
-		netPrefix = "cautem-net"
+		netPrefix = "quarshell-net"
 	}
 	netName := netPrefix + "-" + name
 	ctrName := "quarshell-" + name
@@ -99,7 +99,7 @@ func (d *Driver) createValidated(ctx context.Context, spec sandboxCreateSpec, va
 		return driver.Handle{}, fmt.Errorf("docker driver: %w", err)
 	}
 	if !withSupervisor && restartPolicy != "never" {
-		return driver.Handle{}, fmt.Errorf("docker driver: main process restart policy requires cautem-supervisor")
+		return driver.Handle{}, fmt.Errorf("docker driver: main process restart policy requires quarshell-supervisor")
 	}
 	var caVol string
 	if withSupervisor {
@@ -124,7 +124,7 @@ func (d *Driver) createValidated(ctx context.Context, spec sandboxCreateSpec, va
 		if _, err := os.Stat(spec.SSHBin); err != nil {
 			return driver.Handle{}, fmt.Errorf("docker ssh bin: %w", err)
 		}
-		sshVol = "cautem-ssh-" + name
+		sshVol = "quarshell-ssh-" + name
 		if withSupervisor {
 			tcpDialSocket = filepath.Join(filepath.Dir(d.sandboxSSHSocketPath()), "tcp-forward.sock")
 		}
@@ -190,7 +190,7 @@ func (d *Driver) createValidated(ctx context.Context, spec sandboxCreateSpec, va
 			port = defaultProxy
 		}
 		proxyHost := "quarshell-proxy-" + name
-		caVol = "cautem-ca-" + name
+		caVol = "quarshell-ca-" + name
 		created, err := d.ensureVolume(ctx, caVol, name, roleVolumeCA)
 		if err != nil {
 			return driver.Handle{}, err
@@ -237,7 +237,7 @@ func (d *Driver) createValidated(ctx context.Context, spec sandboxCreateSpec, va
 	}
 	if caVol != "" {
 		binds = append(binds, caVol+":"+defaults.GuestCADir+":ro")
-		labels["cautem.ca_volume"] = caVol
+		labels["quarshell.ca_volume"] = caVol
 	}
 	for k, v := range spec.Labels {
 		k = strings.TrimSpace(k)
@@ -247,9 +247,9 @@ func (d *Driver) createValidated(ctx context.Context, spec sandboxCreateSpec, va
 		labels[k] = v
 	}
 	if configUsed {
-		labels["cautem.internal/driver-config-used"] = "true"
+		labels["quarshell.internal/driver-config-used"] = "true"
 	} else {
-		labels["cautem.internal/driver-config-used"] = "false"
+		labels["quarshell.internal/driver-config-used"] = "false"
 	}
 	containsUnlabelable := false
 	for _, mount := range driverMounts {
@@ -257,39 +257,39 @@ func (d *Driver) createValidated(ctx context.Context, spec sandboxCreateSpec, va
 			containsUnlabelable = true
 		}
 	}
-	labels["cautem.internal/driver-config-unlabelable"] = strconv.FormatBool(containsUnlabelable)
+	labels["quarshell.internal/driver-config-unlabelable"] = strconv.FormatBool(containsUnlabelable)
 	encodedIdentities, err := json.Marshal(resourceIdentities)
 	if err != nil || len(encodedIdentities) > 4096 {
 		return driver.Handle{}, fmt.Errorf("docker driver: resource admission identity record exceeds label limit")
 	}
-	labels["cautem.internal/resource-admission-identities"] = string(encodedIdentities)
+	labels["quarshell.internal/resource-admission-identities"] = string(encodedIdentities)
 	if namespace := strings.TrimSpace(d.runtimeConfig.SandboxNamespace); namespace != "" {
 		labels["openshell.ai/sandbox-namespace"] = namespace
 	}
 	if spec.PersistVolume {
-		volName := "cautem-data-" + name
+		volName := "quarshell-data-" + name
 		if _, err := d.ensureVolume(ctx, volName, name, roleVolumeData); err != nil {
 			return driver.Handle{}, err
 		}
 		binds = append(binds, volName+":"+guestDataPath+":rw")
 		labels[labelVolume] = volName
 		env = mergeEnv(env, []string{
-			"CAUTEM_DATA=" + guestDataPath,
+			"QUARSHELL_DATA=" + guestDataPath,
 			"HOME=" + guestHomePath,
 			"PATH=" + guestPath,
 		})
 		if d.runtimeConfig.ReconcileDataOwnership {
-			env = mergeEnv(env, []string{"CAUTEM_RECONCILE_DATA_OWNERSHIP=1"})
+			env = mergeEnv(env, []string{"QUARSHELL_RECONCILE_DATA_OWNERSHIP=1"})
 		}
 	}
 	if !spec.NoHarden && strings.TrimSpace(spec.InitBin) != "" {
 		if _, err := os.Stat(spec.InitBin); err != nil {
 			return driver.Handle{}, fmt.Errorf("docker init bin: %w", err)
 		}
-		binds = append(binds, spec.InitBin+":/cautem/cautem-init:ro")
+		binds = append(binds, spec.InitBin+":/quarshell/quarshell-init:ro")
 		if spec.PolicyPath != "" {
-			binds = append(binds, spec.PolicyPath+":/cautem/policy.yaml:ro")
-			env = mergeEnv(env, []string{"CAUTEM_POLICY=/cautem/policy.yaml"})
+			binds = append(binds, spec.PolicyPath+":/quarshell/policy.yaml:ro")
+			env = mergeEnv(env, []string{"QUARSHELL_POLICY=/quarshell/policy.yaml"})
 			if abs, err := filepath.Abs(spec.PolicyPath); err == nil {
 				labels[labelPolicy] = abs
 			} else {
@@ -300,9 +300,9 @@ func (d *Driver) createValidated(ctx context.Context, spec sandboxCreateSpec, va
 	}
 	if withSupervisor {
 		binds = append(binds,
-			spec.SupervisorBin+":/cautem/cautem-supervisor:ro",
+			spec.SupervisorBin+":/quarshell/quarshell-supervisor:ro",
 		)
-		labels["cautem.supervisor"] = "go"
+		labels["quarshell.supervisor"] = "go"
 	}
 	if sshVol != "" {
 		binds = append(binds,
@@ -311,11 +311,11 @@ func (d *Driver) createValidated(ctx context.Context, spec sandboxCreateSpec, va
 		labels[labelSSH] = "1"
 		labels[labelSSHVol] = sshVol
 		if tcpDialSocket != "" {
-			env = mergeEnv(env, []string{"CAUTEM_RELAY_TARGET_SOCKET=" + tcpDialSocket})
+			env = mergeEnv(env, []string{"QUARSHELL_RELAY_TARGET_SOCKET=" + tcpDialSocket})
 		}
 		if withSupervisor && strings.TrimSpace(d.runtimeConfig.GatewayGRPCEndpoint) != "" {
 			controlSocket := filepath.Join(filepath.Dir(d.sandboxSSHSocketPath()), driver.SupervisorControlSocketName)
-			env = mergeEnv(env, []string{"CAUTEM_SUPERVISOR_CONTROL_SOCKET=" + controlSocket})
+			env = mergeEnv(env, []string{"QUARSHELL_SUPERVISOR_CONTROL_SOCKET=" + controlSocket})
 		}
 	}
 
@@ -327,7 +327,7 @@ func (d *Driver) createValidated(ctx context.Context, spec sandboxCreateSpec, va
 		}
 		pass := strings.TrimSpace(spec.DisplayPassword)
 		if pass == "" {
-			pass = "cautem"
+			pass = "quarshell"
 		}
 		hostPort := spec.DisplayPort
 		if hostPort <= 0 {
@@ -336,22 +336,22 @@ func (d *Driver) createValidated(ctx context.Context, spec sandboxCreateSpec, va
 		env = mergeEnv(env, []string{
 			"DISPLAY_MODE=novnc",
 			"DISPLAY=:99",
-			"CAUTEM_VNC_PASSWORD=" + pass,
-			fmt.Sprintf("CAUTEM_NOVNC_PORT=%d", defaultNoVNCPort),
+			"QUARSHELL_VNC_PASSWORD=" + pass,
+			fmt.Sprintf("QUARSHELL_NOVNC_PORT=%d", defaultNoVNCPort),
 		})
-		labels["cautem.display"] = "novnc"
-		labels["cautem.display.port"] = strconv.Itoa(hostPort)
+		labels["quarshell.display"] = "novnc"
+		labels["quarshell.display.port"] = strconv.Itoa(hostPort)
 	}
 
 	cmd := spec.Command
 	if len(cmd) == 0 {
 		switch {
 		case withDisplay && usesEmbeddedInit(img):
-			cmd = []string{"--", "/usr/local/bin/cautem-gui-boot"}
+			cmd = []string{"--", "/usr/local/bin/quarshell-gui-boot"}
 		case usesEmbeddedInit(img):
 			cmd = []string{"--", "sleep", "infinity"}
 		case withDisplay:
-			cmd = []string{"/usr/local/bin/cautem-gui-boot"}
+			cmd = []string{"/usr/local/bin/quarshell-gui-boot"}
 		default:
 			cmd = []string{"sleep", "infinity"}
 		}
@@ -375,23 +375,23 @@ func (d *Driver) createValidated(ctx context.Context, spec sandboxCreateSpec, va
 	if !spec.NoHarden && (strings.TrimSpace(spec.InitBin) != "" || usesEmbeddedInit(img)) {
 		cfg.User = "0"
 	}
-	// Prefer host-mounted cautem-init over whatever ENTRYPOINT the image baked
+	// Prefer host-mounted quarshell-init over whatever ENTRYPOINT the image baked
 	// (legacy osg-init looked for /osg/policy.yaml and dies on rename).
 	if !spec.NoHarden && strings.TrimSpace(spec.InitBin) != "" {
-		cfg.Entrypoint = []string{"/cautem/cautem-init"}
+		cfg.Entrypoint = []string{"/quarshell/quarshell-init"}
 		if len(spec.Command) == 0 && !usesEmbeddedInit(img) && !withDisplay {
 			// Image has no init wrapper — Cmd is the payload after "--".
 			cfg.Cmd = append([]string{"--"}, cmd...)
 		} else if len(spec.Command) == 0 && !usesEmbeddedInit(img) && withDisplay {
-			cfg.Cmd = []string{"--", "/usr/local/bin/cautem-gui-boot"}
+			cfg.Cmd = []string{"--", "/usr/local/bin/quarshell-gui-boot"}
 		}
 	}
 	if withSupervisor {
 		// The Go PID 1 supervisor owns workload lifecycle and signal handling.
 		// The hardened init remains the child entrypoint and applies Landlock
 		// plus the checked identity drop before execing the agent command.
-		cfg.Entrypoint = []string{"/cautem/cautem-supervisor"}
-		cfg.Cmd = append([]string{"--", "/cautem/cautem-init", "--policy", "/cautem/policy.yaml", "--"}, workloadCmd...)
+		cfg.Entrypoint = []string{"/quarshell/quarshell-supervisor"}
+		cfg.Cmd = append([]string{"--", "/quarshell/quarshell-init", "--policy", "/quarshell/policy.yaml", "--"}, workloadCmd...)
 		cfg.User = "0"
 	}
 	securityOpts := []string{"no-new-privileges:true"}
@@ -591,7 +591,7 @@ func (d *Driver) ensureVolume(ctx context.Context, volumeName, sandboxName, role
 	} else if !isNotFound(err) {
 		return false, err
 	}
-	labels := map[string]string{labelSandbox: "1", labelName: sandboxName, labelRole: role, "cautem.volume": "1"}
+	labels := map[string]string{labelSandbox: "1", labelName: sandboxName, labelRole: role, "quarshell.volume": "1"}
 	if _, err := d.cli.VolumeCreate(ctx, client.VolumeCreateOptions{Name: volumeName, Labels: labels}); err != nil {
 		if verifyErr := verify(); verifyErr != nil {
 			return false, fmt.Errorf("docker volume create %s: %w", volumeName, err)
@@ -602,23 +602,23 @@ func (d *Driver) ensureVolume(ctx context.Context, volumeName, sandboxName, role
 }
 
 func volumeOwnershipLabelsValid(volumeName, sandboxName, role string, labels map[string]string) bool {
-	if labels[labelSandbox] == "1" && labels[labelName] == sandboxName && labels[labelRole] == role && labels["cautem.volume"] == "1" {
+	if labels[labelSandbox] == "1" && labels[labelName] == sandboxName && labels[labelRole] == role && labels["quarshell.volume"] == "1" {
 		return true
 	}
 	// Volumes created before per-sandbox ownership labels used this marker and
 	// deterministic names. Keep existing sandbox data usable across upgrade;
 	// the durable cleanup manifest records the workload-to-volume association.
-	return labels["cautem.volume"] == "1" && volumeName == expectedVolumeName(sandboxName, role)
+	return labels["quarshell.volume"] == "1" && volumeName == expectedVolumeName(sandboxName, role)
 }
 
 func expectedVolumeName(sandboxName, role string) string {
 	switch role {
 	case roleVolumeData:
-		return "cautem-data-" + sandboxName
+		return "quarshell-data-" + sandboxName
 	case roleVolumeCA:
-		return "cautem-ca-" + sandboxName
+		return "quarshell-ca-" + sandboxName
 	case roleVolumeSSH:
-		return "cautem-ssh-" + sandboxName
+		return "quarshell-ssh-" + sandboxName
 	default:
 		return ""
 	}

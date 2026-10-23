@@ -56,7 +56,7 @@ func (d *Driver) startRuntime(ctx context.Context, id core.ID, replacementToken 
 	if err := d.runtimeConfig.Validate(); err != nil {
 		return err
 	}
-	params, err := cautemRuntimeParamsFromSandbox(object, version, d.runtimeConfig)
+	params, err := quarshellRuntimeParamsFromSandbox(object, version, d.runtimeConfig)
 	if err != nil {
 		return err
 	}
@@ -81,7 +81,7 @@ func (d *Driver) startRuntime(ctx context.Context, id core.ID, replacementToken 
 		if err != nil {
 			return err
 		}
-		params, err = cautemRuntimeParamsFromSandbox(object, version, d.runtimeConfig)
+		params, err = quarshellRuntimeParamsFromSandbox(object, version, d.runtimeConfig)
 		if err != nil {
 			return err
 		}
@@ -89,12 +89,12 @@ func (d *Driver) startRuntime(ctx context.Context, id core.ID, replacementToken 
 	previousGeneration := ""
 	if replacementToken != "" {
 		previousGeneration = params.Generation
-		object, params, err = rotateCautemRuntimeGeneration(ctx, backend, object, params, replacementToken, nil)
+		object, params, err = rotateQuarshellRuntimeGeneration(ctx, backend, object, params, replacementToken, nil)
 		if err != nil {
 			return err
 		}
 	}
-	if err := startCautemRuntime(ctx, backend, object, params); err != nil {
+	if err := startQuarshellRuntime(ctx, backend, object, params); err != nil {
 		return err
 	}
 	if previousGeneration != "" {
@@ -103,17 +103,17 @@ func (d *Driver) startRuntime(ctx context.Context, id core.ID, replacementToken 
 			SandboxUID: params.SandboxResourceUID, SandboxID: params.SandboxID, Generation: previousGeneration,
 			WorkloadName: params.SandboxResourceName, SupervisorName: "os-supervisor-" + params.SandboxID,
 		}
-		if err := backend.DeleteCautemGenerationSecrets(ctx, previousIdentity); err != nil {
+		if err := backend.DeleteQuarshellGenerationSecrets(ctx, previousIdentity); err != nil {
 			cleanupCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), sandboxAPITimeout)
 			defer cancel()
 			stopErr := d.stop(cleanupCtx, id)
-			return errors.Join(fmt.Errorf("remove previous Cautem runtime credentials: %w", err), stopErr)
+			return errors.Join(fmt.Errorf("remove previous Quarshell runtime credentials: %w", err), stopErr)
 		}
 	}
 	return nil
 }
 
-func rotateCautemRuntimeGeneration(
+func rotateQuarshellRuntimeGeneration(
 	ctx context.Context,
 	backend *dynamicAgentSandboxCreateBackend,
 	sandbox *unstructured.Unstructured,
@@ -148,27 +148,27 @@ func rotateCautemRuntimeGeneration(
 		ServiceIP: service.ClusterIP, ControlServiceIP: controlService.ClusterIP,
 		WorkloadName: params.SandboxResourceName, SupervisorName: "os-supervisor-" + params.SandboxID,
 	}
-	currentSecrets, err := backend.ReadCautemGenerationSecrets(ctx, oldIdentity)
+	currentSecrets, err := backend.ReadQuarshellGenerationSecrets(ctx, oldIdentity)
 	if err != nil {
 		return nil, params, err
 	}
 	newIdentity := oldIdentity
 	newIdentity.Generation = newGeneration
-	newSecrets, err := rotateCautemGenerationSecretsWithPolicy(currentSecrets, oldGeneration, newIdentity, token, policyOverride)
+	newSecrets, err := rotateQuarshellGenerationSecretsWithPolicy(currentSecrets, oldGeneration, newIdentity, token, policyOverride)
 	if err != nil {
-		return nil, params, fmt.Errorf("build replacement Cautem runtime generation: %w", err)
+		return nil, params, fmt.Errorf("build replacement Quarshell runtime generation: %w", err)
 	}
 	if err := backend.CreateBootstrapSecrets(ctx, newSecrets); err != nil {
 		cleanupCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), sandboxAPITimeout)
 		defer cancel()
-		_ = backend.DeleteCautemGenerationSecrets(cleanupCtx, newIdentity)
-		return nil, params, fmt.Errorf("create replacement Cautem runtime Secrets: %w", err)
+		_ = backend.DeleteQuarshellGenerationSecrets(cleanupCtx, newIdentity)
+		return nil, params, fmt.Errorf("create replacement Quarshell runtime Secrets: %w", err)
 	}
 	updatedSandbox, err := backend.SetSandboxRuntimeGeneration(ctx, oldIdentity, newGeneration)
 	if err != nil {
 		cleanupCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), sandboxAPITimeout)
 		defer cancel()
-		_ = backend.DeleteCautemGenerationSecrets(cleanupCtx, newIdentity)
+		_ = backend.DeleteQuarshellGenerationSecrets(cleanupCtx, newIdentity)
 		return nil, params, fmt.Errorf("switch Agent Sandbox to replacement runtime generation: %w", err)
 	}
 	params.Generation = newGeneration
@@ -193,7 +193,7 @@ func (d *Driver) updateSandboxPolicy(ctx context.Context, id core.ID, policy []b
 	if !wasRunning && sandboxOperatingMode(object, version) != "Suspended" {
 		return fmt.Errorf("agent Sandbox operating mode %q cannot accept a policy update safely", sandboxOperatingMode(object, version))
 	}
-	params, err := cautemRuntimeParamsFromSandbox(object, version, d.runtimeConfig)
+	params, err := quarshellRuntimeParamsFromSandbox(object, version, d.runtimeConfig)
 	if err != nil {
 		return err
 	}
@@ -204,11 +204,11 @@ func (d *Driver) updateSandboxPolicy(ctx context.Context, id core.ID, policy []b
 		SandboxUID: identity.UID, SandboxID: sandboxID, Generation: params.Generation,
 		WorkloadName: identity.Name, SupervisorName: "os-supervisor-" + sandboxID,
 	}
-	currentSecrets, err := backend.ReadCautemGenerationSecrets(ctx, secretIdentity)
+	currentSecrets, err := backend.ReadQuarshellGenerationSecrets(ctx, secretIdentity)
 	if err != nil {
 		return err
 	}
-	currentPolicy, err := cautemGenerationPolicy(currentSecrets, secretIdentity)
+	currentPolicy, err := quarshellGenerationPolicy(currentSecrets, secretIdentity)
 	if err != nil {
 		return err
 	}
@@ -231,8 +231,8 @@ func (d *Driver) updateSandboxPolicy(ctx context.Context, id core.ID, policy []b
 			if recoveryErr := d.start(recoveryCtx, id); recoveryErr != nil {
 				result = errors.Join(result, fmt.Errorf("restore Kubernetes runtime after policy update failure: %w", recoveryErr))
 			} else if generationSwitched {
-				if cleanupErr := backend.DeleteCautemGenerationSecrets(recoveryCtx, previousIdentity); cleanupErr != nil {
-					result = errors.Join(result, fmt.Errorf("remove previous Cautem policy generation after recovery: %w", cleanupErr))
+				if cleanupErr := backend.DeleteQuarshellGenerationSecrets(recoveryCtx, previousIdentity); cleanupErr != nil {
+					result = errors.Join(result, fmt.Errorf("remove previous Quarshell policy generation after recovery: %w", cleanupErr))
 				}
 			}
 		}()
@@ -243,7 +243,7 @@ func (d *Driver) updateSandboxPolicy(ctx context.Context, id core.ID, policy []b
 		if err != nil {
 			return err
 		}
-		params, err = cautemRuntimeParamsFromSandbox(object, version, d.runtimeConfig)
+		params, err = quarshellRuntimeParamsFromSandbox(object, version, d.runtimeConfig)
 		if err != nil {
 			return err
 		}
@@ -268,11 +268,11 @@ func (d *Driver) updateSandboxPolicy(ctx context.Context, id core.ID, policy []b
 	}
 	secretIdentity.ServiceIP = service.ClusterIP
 	secretIdentity.ControlServiceIP = controlService.ClusterIP
-	currentSecrets, err = backend.ReadCautemGenerationSecrets(ctx, secretIdentity)
+	currentSecrets, err = backend.ReadQuarshellGenerationSecrets(ctx, secretIdentity)
 	if err != nil {
 		return err
 	}
-	currentPolicy, err = cautemGenerationPolicy(currentSecrets, secretIdentity)
+	currentPolicy, err = quarshellGenerationPolicy(currentSecrets, secretIdentity)
 	if err != nil {
 		return err
 	}
@@ -286,18 +286,18 @@ func (d *Driver) updateSandboxPolicy(ctx context.Context, id core.ID, policy []b
 		}
 		return nil
 	}
-	token, err := cautemGenerationSandboxToken(currentSecrets, secretIdentity)
+	token, err := quarshellGenerationSandboxToken(currentSecrets, secretIdentity)
 	if err != nil {
 		return err
 	}
-	if _, _, err := rotateCautemRuntimeGeneration(ctx, backend, object, params, token, policy); err != nil {
+	if _, _, err := rotateQuarshellRuntimeGeneration(ctx, backend, object, params, token, policy); err != nil {
 		return err
 	}
 	generationSwitched = true
 	previousIdentity.Generation = params.Generation
 	if !wasRunning {
-		if err := backend.DeleteCautemGenerationSecrets(ctx, previousIdentity); err != nil {
-			return fmt.Errorf("remove previous Cautem policy generation: %w", err)
+		if err := backend.DeleteQuarshellGenerationSecrets(ctx, previousIdentity); err != nil {
+			return fmt.Errorf("remove previous Quarshell policy generation: %w", err)
 		}
 		return nil
 	}
@@ -305,18 +305,18 @@ func (d *Driver) updateSandboxPolicy(ctx context.Context, id core.ID, policy []b
 	if err != nil {
 		return err
 	}
-	updatedParams, err := cautemRuntimeParamsFromSandbox(updatedObject, version, d.runtimeConfig)
+	updatedParams, err := quarshellRuntimeParamsFromSandbox(updatedObject, version, d.runtimeConfig)
 	if err != nil {
 		return err
 	}
-	if err := startCautemRuntime(ctx, backend, updatedObject, updatedParams); err != nil {
+	if err := startQuarshellRuntime(ctx, backend, updatedObject, updatedParams); err != nil {
 		return fmt.Errorf("start Kubernetes runtime with updated policy: %w", err)
 	}
-	if err := backend.DeleteCautemGenerationSecrets(ctx, previousIdentity); err != nil {
+	if err := backend.DeleteQuarshellGenerationSecrets(ctx, previousIdentity); err != nil {
 		cleanupCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), sandboxAPITimeout)
 		defer cancel()
 		stopErr := d.stop(cleanupCtx, id)
-		return errors.Join(fmt.Errorf("remove previous Cautem policy generation: %w", err), stopErr)
+		return errors.Join(fmt.Errorf("remove previous Quarshell policy generation: %w", err), stopErr)
 	}
 	return nil
 }
@@ -332,7 +332,7 @@ func (d *Driver) refreshSandboxRuntimeCredentials(ctx context.Context, id core.I
 	if sandboxOperatingMode(object, version) != "Running" {
 		return nil
 	}
-	params, err := cautemRuntimeParamsFromSandbox(object, version, d.runtimeConfig)
+	params, err := quarshellRuntimeParamsFromSandbox(object, version, d.runtimeConfig)
 	if err != nil {
 		return err
 	}
@@ -342,11 +342,11 @@ func (d *Driver) refreshSandboxRuntimeCredentials(ctx context.Context, id core.I
 		SandboxUID: identity.UID, SandboxID: sandboxID, Generation: params.Generation,
 		WorkloadName: identity.Name, SupervisorName: "os-supervisor-" + sandboxID,
 	}
-	secrets, err := newDynamicAgentSandboxCreateBackend(apiClient.client).ReadCautemGenerationSecrets(ctx, secretIdentity)
+	secrets, err := newDynamicAgentSandboxCreateBackend(apiClient.client).ReadQuarshellGenerationSecrets(ctx, secretIdentity)
 	if err != nil {
 		return err
 	}
-	policy, err := cautemGenerationPolicy(secrets, secretIdentity)
+	policy, err := quarshellGenerationPolicy(secrets, secretIdentity)
 	if err != nil {
 		return err
 	}
@@ -406,36 +406,36 @@ func runtimeBridgeCertificatesNeedRefresh(
 	return false, nil
 }
 
-func cautemGenerationPolicy(secrets []map[string]any, identity agentSandboxCreateIdentity) ([]byte, error) {
+func quarshellGenerationPolicy(secrets []map[string]any, identity agentSandboxCreateIdentity) ([]byte, error) {
 	for _, secret := range secrets {
 		metadata, _ := secret["metadata"].(map[string]any)
 		if stringValue(metadata["name"]) != generationSecretName("os-supervisor", identity.SandboxID, identity.Generation) {
 			continue
 		}
 		data, _ := secret["data"].(map[string]any)
-		return decodeSecretData(data, cautemRuntimePolicyKey)
+		return decodeSecretData(data, quarshellRuntimePolicyKey)
 	}
-	return nil, fmt.Errorf("cautem supervisor Secret is missing from the active generation")
+	return nil, fmt.Errorf("quarshell supervisor Secret is missing from the active generation")
 }
 
-func cautemGenerationSandboxToken(secrets []map[string]any, identity agentSandboxCreateIdentity) (string, error) {
+func quarshellGenerationSandboxToken(secrets []map[string]any, identity agentSandboxCreateIdentity) (string, error) {
 	for _, secret := range secrets {
 		metadata, _ := secret["metadata"].(map[string]any)
 		if stringValue(metadata["name"]) != generationSecretName("os-supervisor", identity.SandboxID, identity.Generation) {
 			continue
 		}
 		data, _ := secret["data"].(map[string]any)
-		value, err := decodeSecretData(data, cautemProxyTokenKey)
+		value, err := decodeSecretData(data, quarshellProxyTokenKey)
 		if err != nil {
 			return "", err
 		}
 		token := strings.TrimSpace(string(value))
 		if token == "" || strings.ContainsAny(token, "\r\n") {
-			return "", fmt.Errorf("stored Cautem sandbox token is invalid")
+			return "", fmt.Errorf("stored Quarshell sandbox token is invalid")
 		}
 		return token, nil
 	}
-	return "", fmt.Errorf("cautem supervisor Secret is missing from the active generation")
+	return "", fmt.Errorf("quarshell supervisor Secret is missing from the active generation")
 }
 
 func (d *Driver) stop(ctx context.Context, id core.ID) error {
@@ -548,7 +548,7 @@ func (d *Driver) runtimeSandbox(ctx context.Context, id core.ID) (*unstructured.
 	return object, version, identity, apiClient, nil
 }
 
-func cautemRuntimeParamsFromSandbox(object *unstructured.Unstructured, version string, config BackendConfig) (agentSandboxRuntimeRenderParams, error) {
+func quarshellRuntimeParamsFromSandbox(object *unstructured.Unstructured, version string, config BackendConfig) (agentSandboxRuntimeRenderParams, error) {
 	labels := object.GetLabels()
 	annotations := object.GetAnnotations()
 	resourceVersion, _, _ := unstructured.NestedString(object.Object, "apiVersion")
@@ -559,34 +559,34 @@ func cautemRuntimeParamsFromSandbox(object *unstructured.Unstructured, version s
 		Namespace: object.GetNamespace(), SandboxResourceName: object.GetName(), SandboxResourceAPIVersion: resourceVersion,
 		SandboxResourceUID: string(object.GetUID()), SandboxID: labels[labelSandboxID], SandboxName: labels[labelSandboxName],
 		Workspace: labels[labelSandboxWorkspace], GatewayID: labels[labelGatewayID], Generation: annotations[annotationRuntimeGeneration],
-		CautemProxyImage: config.ProxyImage, CautemProxyImagePullPolicy: config.ProxyImagePullPolicy,
-		CautemGatewayURL: annotations[annotationCautemGatewayURL], CautemGatewayGRPCEndpoint: annotations[annotationCautemGatewayRPC],
+		QuarshellProxyImage: config.ProxyImage, QuarshellProxyImagePullPolicy: config.ProxyImagePullPolicy,
+		QuarshellGatewayURL: annotations[annotationQuarshellGatewayURL], QuarshellGatewayGRPCEndpoint: annotations[annotationQuarshellGatewayRPC],
 		ServiceAccountName: config.ServiceAccountName, ImagePullSecrets: config.ImagePullSecrets,
 		ControlUID: config.ControlUID, ControlGID: config.ControlGID, BoundaryPort: config.BoundaryPort,
 	}
-	parsedTLS, err := strconv.ParseBool(annotations[annotationCautemGatewayTLS])
+	parsedTLS, err := strconv.ParseBool(annotations[annotationQuarshellGatewayTLS])
 	if err != nil {
-		return agentSandboxRuntimeRenderParams{}, fmt.Errorf("agent Sandbox Cautem TLS annotation is missing or invalid")
+		return agentSandboxRuntimeRenderParams{}, fmt.Errorf("agent Sandbox Quarshell TLS annotation is missing or invalid")
 	}
-	params.CautemGatewayTLS = parsedTLS
+	params.QuarshellGatewayTLS = parsedTLS
 	if strings.TrimSpace(params.SandboxName) == "" || params.GatewayID != config.GatewayID || params.Workspace == "" {
 		return agentSandboxRuntimeRenderParams{}, fmt.Errorf("agent Sandbox runtime labels do not match this Gateway")
 	}
-	if err := validateCautemGatewayURL("stored Kubernetes Gateway URL", params.CautemGatewayURL); err != nil {
+	if err := validateQuarshellGatewayURL("stored Kubernetes Gateway URL", params.QuarshellGatewayURL); err != nil {
 		return agentSandboxRuntimeRenderParams{}, err
 	}
-	if err := validateCautemGatewayEndpoint(params.CautemGatewayGRPCEndpoint); err != nil {
+	if err := validateQuarshellGatewayEndpoint(params.QuarshellGatewayGRPCEndpoint); err != nil {
 		return agentSandboxRuntimeRenderParams{}, err
 	}
-	parsedURL, _ := url.Parse(params.CautemGatewayURL)
-	grpcHost, _, _ := net.SplitHostPort(params.CautemGatewayGRPCEndpoint)
+	parsedURL, _ := url.Parse(params.QuarshellGatewayURL)
+	grpcHost, _, _ := net.SplitHostPort(params.QuarshellGatewayGRPCEndpoint)
 	if !strings.EqualFold(strings.TrimSuffix(parsedURL.Hostname(), "."), strings.TrimSuffix(grpcHost, ".")) {
 		return agentSandboxRuntimeRenderParams{}, fmt.Errorf("stored Gateway URL and gRPC endpoint host do not match")
 	}
 	return params, nil
 }
 
-func startCautemRuntime(ctx context.Context, backend *dynamicAgentSandboxCreateBackend, sandbox *unstructured.Unstructured, params agentSandboxRuntimeRenderParams) (result error) {
+func startQuarshellRuntime(ctx context.Context, backend *dynamicAgentSandboxCreateBackend, sandbox *unstructured.Unstructured, params agentSandboxRuntimeRenderParams) (result error) {
 	resources, err := renderAgentSandboxRuntimeResources(params)
 	if err != nil {
 		return err
@@ -616,19 +616,19 @@ func startCautemRuntime(ctx context.Context, backend *dynamicAgentSandboxCreateB
 		ServiceIP: service.ClusterIP, ControlServiceIP: controlService.ClusterIP,
 		WorkloadName: params.SandboxResourceName, SupervisorName: "os-supervisor-" + params.SandboxID,
 	}
-	secrets, err := backend.ReadCautemGenerationSecrets(ctx, identity)
+	secrets, err := backend.ReadQuarshellGenerationSecrets(ctx, identity)
 	if err != nil {
 		return err
 	}
 	if err := validateStoredBridgeTLS(secrets, params.SandboxID, params.Generation); err != nil {
 		return err
 	}
-	if err := validateStoredGuestTLS(secrets, params.SandboxID, params.Generation, params.CautemGatewayTLS); err != nil {
+	if err := validateStoredGuestTLS(secrets, params.SandboxID, params.Generation, params.QuarshellGatewayTLS); err != nil {
 		return err
 	}
 	supervisor, err := backend.CreateGatedSupervisor(ctx, resources["supervisorPod"].(map[string]any))
 	if err != nil {
-		return fmt.Errorf("create gated Cautem proxy Pod: %w", err)
+		return fmt.Errorf("create gated Quarshell proxy Pod: %w", err)
 	}
 	if err := validateAgentSandboxSupervisorIdentity(supervisor, params, params.SandboxResourceUID); err != nil {
 		return err
@@ -668,10 +668,10 @@ func startCautemRuntime(ctx context.Context, backend *dynamicAgentSandboxCreateB
 		WorkloadName: workload.Name, WorkloadUID: workload.UID, Fence: fence,
 	}
 	if err := backend.RecordRuntimePairEvidence(ctx, pair); err != nil {
-		return fmt.Errorf("record Cautem runtime Pod identities: %w", err)
+		return fmt.Errorf("record Quarshell runtime Pod identities: %w", err)
 	}
 	if err := backend.ReleaseSchedulingGate(ctx, params.Namespace, supervisor.Name, supervisor.UID); err != nil {
-		return fmt.Errorf("release Cautem proxy scheduling gate: %w", err)
+		return fmt.Errorf("release Quarshell proxy scheduling gate: %w", err)
 	}
 	if err := backend.ReleaseSchedulingGate(ctx, params.Namespace, workload.Name, workload.UID); err != nil {
 		return fmt.Errorf("release workload scheduling gate: %w", err)
@@ -680,7 +680,7 @@ func startCautemRuntime(ctx context.Context, backend *dynamicAgentSandboxCreateB
 		return err
 	}
 	if err := backend.MarkRuntimeReleased(ctx, params.Namespace, params.SandboxResourceAPIVersion, params.SandboxResourceName, params.SandboxResourceUID); err != nil {
-		return fmt.Errorf("mark Cautem runtime released: %w", err)
+		return fmt.Errorf("mark Quarshell runtime released: %w", err)
 	}
 	active = false
 	return nil
@@ -746,7 +746,7 @@ func validateStoredGuestTLS(secrets []map[string]any, sandboxID, generation stri
 		}
 		data, _ := secret["data"].(map[string]any)
 		count := 0
-		for _, key := range []string{cautemGatewayTLSCAKey, cautemGatewayTLSCertKey, cautemGatewayTLSKeyKey} {
+		for _, key := range []string{quarshellGatewayTLSCAKey, quarshellGatewayTLSCertKey, quarshellGatewayTLSKeyKey} {
 			if _, ok := data[key]; ok {
 				count++
 			}
@@ -755,15 +755,15 @@ func validateStoredGuestTLS(secrets []map[string]any, sandboxID, generation stri
 			return fmt.Errorf("stored guest TLS Secret does not match the Gateway endpoint scheme")
 		}
 		if gatewayTLS {
-			ca, err := decodeSecretData(data, cautemGatewayTLSCAKey)
+			ca, err := decodeSecretData(data, quarshellGatewayTLSCAKey)
 			if err != nil {
 				return err
 			}
-			cert, err := decodeSecretData(data, cautemGatewayTLSCertKey)
+			cert, err := decodeSecretData(data, quarshellGatewayTLSCertKey)
 			if err != nil {
 				return err
 			}
-			key, err := decodeSecretData(data, cautemGatewayTLSKeyKey)
+			key, err := decodeSecretData(data, quarshellGatewayTLSKeyKey)
 			if err != nil {
 				return err
 			}
@@ -780,7 +780,7 @@ func validateStoredGuestTLS(secrets []map[string]any, sandboxID, generation stri
 		}
 		return nil
 	}
-	return fmt.Errorf("stored Cautem supervisor Secret is missing")
+	return fmt.Errorf("stored Quarshell supervisor Secret is missing")
 }
 
 func decodeSecretData(data map[string]any, key string) ([]byte, error) {

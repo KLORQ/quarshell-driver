@@ -84,7 +84,7 @@ func TestEnsureWorkspaceIsolationRejectsForeignNamespaceAndForgedManifest(t *tes
 		t.Fatalf("foreign namespace error = %v; want identity mismatch", err)
 	}
 	forged := (&unstructured.Unstructured{Object: namespace}).DeepCopy()
-	forged.SetName("cautem-ws-forged")
+	forged.SetName("quarshell-ws-forged")
 	if err := backend.EnsureWorkspaceIsolation(context.Background(), name, "gateway-a", "workspace-a", forged.Object, denyAll); err == nil {
 		t.Fatal("forged Namespace manifest was accepted")
 	}

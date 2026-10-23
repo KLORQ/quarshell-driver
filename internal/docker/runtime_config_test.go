@@ -17,9 +17,9 @@ func TestUpstreamProxyEnvIsSidecarScopedAndCredentialFree(t *testing.T) {
 	for _, want := range []string{
 		"HTTPS_PROXY=https://proxy.example.test:8443",
 		"NO_PROXY=localhost,.svc.cluster.local",
-		"CAUTEM_PROXY_CONNECT_BY_HOSTNAME=true",
-		"CAUTEM_PROXY_AUTH_FILE=/run/cautem/upstream-proxy/auth",
-		"CAUTEM_PROXY_CA_BUNDLE=/run/cautem/upstream-proxy/ca.pem",
+		"QUARSHELL_PROXY_CONNECT_BY_HOSTNAME=true",
+		"QUARSHELL_PROXY_AUTH_FILE=/run/quarshell/upstream-proxy/auth",
+		"QUARSHELL_PROXY_CA_BUNDLE=/run/quarshell/upstream-proxy/ca.pem",
 	} {
 		if !slices.Contains(env, want) {
 			t.Fatalf("proxy env=%v, missing %q", env, want)

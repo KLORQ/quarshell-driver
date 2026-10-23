@@ -11,7 +11,7 @@
   <a href="https://github.com/KLORQ/quarshell-driver"><img src="https://img.shields.io/badge/Go-1.27+-00ADD8?logo=go" alt="Go Version"></a>
 </p>
 <p align="center">
-  <sub>Part of the <a href="https://github.com/KLORQ">cautem / cautem</a> ecosystem</sub>
+  <sub>Part of the <a href="https://github.com/KLORQ">quarshell / quarshell</a> ecosystem</sub>
 </p>
 
 ---
@@ -20,7 +20,7 @@
 
 Backend setup and runtime limits are maintained in the [Docker](https://klorq.github.io/sandbox.dev/providers/docker/) and [Podman](https://klorq.github.io/sandbox.dev/providers/podman/) guides. The [OpenShell compatibility page](https://klorq.github.io/sandbox.dev/reference/openshell-compatibility/) records the current comparison scope.
 
-**quarshell-driver** implements modular `Backend` contracts for cautem. Docker and Podman provide the local container lifecycle; Kubernetes provisions Agent Sandbox workloads and a paired Cautem proxy companion. The Kubernetes backend remains experimental until the target cluster passes the live runtime and NetworkPolicy checks in the [Gateway packaging guide](https://github.com/KLORQ/quarshell/blob/main/quarshell-gateway/packaging/README.md).
+**quarshell-driver** implements modular `Backend` contracts for quarshell. Docker and Podman provide the local container lifecycle; Kubernetes provisions Agent Sandbox workloads and a paired Quarshell proxy companion. The Kubernetes backend remains experimental until the target cluster passes the live runtime and NetworkPolicy checks in the [Gateway packaging guide](https://github.com/KLORQ/quarshell/blob/main/quarshell-gateway/packaging/README.md).
 
 ### Key Features
 
@@ -29,9 +29,9 @@ Backend setup and runtime limits are maintained in the [Docker](https://klorq.gi
 | **Docker** | Engine API create/exec/logs (Podman-compatible socket) |
 | **Kubernetes** | Agent Sandbox lifecycle, workspace namespace/PVC, gated workload and proxy Pods, immutable credential generations |
 | **Sidecar** | Proxy container on dual-home network + CA bundle env |
-| **Hosts** | `HostGatewayExtraHosts()` → `host.cautem.internal` / `host.docker.internal` |
+| **Hosts** | `HostGatewayExtraHosts()` → `host.quarshell.internal` / `host.docker.internal` |
 | **Mounts** | Workdir + reserved system paths validation |
-| **Experimental** | Kubernetes requires Agent Sandbox, digest-pinned Cautem images, persistent storage, and a CNI that enforces NetworkPolicy |
+| **Experimental** | Kubernetes requires Agent Sandbox, digest-pinned Quarshell images, persistent storage, and a CNI that enforces NetworkPolicy |
 | **Experimental** | MicroVM has per-VM policy networking, authenticated host/guest supervisor isolation, Gateway paired credentials, SSH relay, one-shot and interactive PTY exec, bounded Gateway logs and authenticated file copy; macOS ARM64/HVF Gateway lifecycle is live-tested, while Linux KVM, durable log/watch and remaining OpenShell VM parity are pending |
 
 ---
@@ -62,7 +62,7 @@ _ = backend
 _ = registered
 _ = err
 hosts := driver.HostGatewayExtraHosts()
-// []string{"host.cautem.internal:host-gateway", "host.docker.internal:host-gateway"}
+// []string{"host.quarshell.internal:host-gateway", "host.docker.internal:host-gateway"}
 _ = hosts
 ```
 
@@ -87,7 +87,7 @@ tools, connecting to services, or mutating host state.
 | `internal/docker/` | Docker Engine implementation |
 | `podman/` | Podman socket discovery → Docker API client |
 | `quarshell-driver-vm` module (`vm/`, `vmguest/`, `cmd/`) | OpenShell-style libkrun MicroVM driver (worker supervision, persisted lifecycle, guest vsock control, one-shot Exec, logs, and file copy; import `github.com/KLORQ/quarshell-driver-vm/vm` in the composition root to register it) |
-| `internal/kubernetes/` | Native Gateway `Backend` registration for Agent Sandbox lifecycle, workspace isolation, immutable runtime Secrets, and paired Cautem Pods |
+| `internal/kubernetes/` | Native Gateway `Backend` registration for Agent Sandbox lifecycle, workspace isolation, immutable runtime Secrets, and paired Quarshell Pods |
 | `internal/mounts/` | Bind-mount policy |
 | `internal/sidecar/` | CA / env helpers for the proxy sidecar |
 
@@ -107,11 +107,11 @@ Policy changes replace immutable Secret generations; an active sandbox is
 restarted so the workload and proxy load the same policy. The Gateway waits for
 the supervisor to report the new revision.
 
-Configure `CAUTEM_KUBERNETES_PROXY_IMAGE` and
-`CAUTEM_KUBERNETES_RUNTIME_IMAGE` with immutable `@sha256:` references, and set
-`CAUTEM_KUBERNETES_GRPC_ENDPOINT` to an endpoint reachable from Pods. HTTPS
-endpoints also require the `CAUTEM_KUBERNETES_GUEST_TLS_CA`,
-`CAUTEM_KUBERNETES_GUEST_TLS_CERT`, and `CAUTEM_KUBERNETES_GUEST_TLS_KEY`
+Configure `QUARSHELL_KUBERNETES_PROXY_IMAGE` and
+`QUARSHELL_KUBERNETES_RUNTIME_IMAGE` with immutable `@sha256:` references, and set
+`QUARSHELL_KUBERNETES_GRPC_ENDPOINT` to an endpoint reachable from Pods. HTTPS
+endpoints also require the `QUARSHELL_KUBERNETES_GUEST_TLS_CA`,
+`QUARSHELL_KUBERNETES_GUEST_TLS_CERT`, and `QUARSHELL_KUBERNETES_GUEST_TLS_KEY`
 files. The cluster needs the Agent Sandbox controller, a working PVC storage
 class, and a NetworkPolicy-enforcing CNI. Run the live traffic probe against
 the target cluster before enabling this experimental backend; fake API tests
@@ -122,7 +122,7 @@ and object admission do not verify workload startup or traffic isolation.
 The VM backend is experimental and is not yet a production replacement for
 Docker or OpenShell. It implements Create/Start/Stop/Delete/List/Inspect,
 one-shot Exec, console logs, and file copy. The driver launches an isolated
-`cautem-vm-worker`; the guest runs a static Go control agent on a host-initiated
+`quarshell-vm-worker`; the guest runs a static Go control agent on a host-initiated
 virtio-vsock port. The authenticated host↔guest control channel uses
 length-prefixed JSON protocol v1, and each side rejects unsupported versions.
 Windows builds include compile-only stubs for Unix guest-preparation helpers;
@@ -142,7 +142,7 @@ across the vsock relay. The driver issues per-boot credentials bound to the
 sandbox ID, rootfs digest, runtime artifact digest and generation; each request
 carries versioned claims and a fresh nonce that the host checks against the
 authenticated URI SAN. The guest client key is installed root-only under
-`/run/cautem` before the workload starts. This establishes the transport
+`/run/quarshell` before the workload starts. This establishes the transport
 boundary; moving provider and
 policy execution fully to a host supervisor and running the hostile-guest and
 cross-host acceptance suite are still required before production use.
@@ -188,7 +188,7 @@ and target-host acceptance remain release gates.
 The rootfs cache lives under `<state_dir>/images`; base ext4 images are
 immutable and keyed by source manifest, selected platform manifest, platform,
 rootfs layout version and guest-agent digest. The default quota is 64 GiB and
-can be changed with `CAUTEM_VM_IMAGE_CACHE_MAX_BYTES`. GC keeps images referenced
+can be changed with `QUARSHELL_VM_IMAGE_CACHE_MAX_BYTES`. GC keeps images referenced
 by durable sandbox state or protected by an active create lease. Uploaded rootfs
 archives are limited to 10 GiB compressed; decompressed layer/rootfs data is
 limited to 32 GiB. The image must match the host architecture and provide Linux
@@ -212,19 +212,19 @@ The driver-level macOS ARM64 HVF live lifecycle acceptance passes on the
 development host; Gateway/CLI end-to-end acceptance, Linux KVM, installed
 release bundles and GPU/VFIO lanes remain required.
 
-Build the native worker, static Linux guest agent, `cautem-init`,
-`cautem-supervisor`, and `cautem-sshd` with `scripts/build-vm-runtime.sh`.
+Build the native worker, static Linux guest agent, `quarshell-init`,
+`quarshell-supervisor`, and `quarshell-sshd` with `scripts/build-vm-runtime.sh`.
 The build verifies umoci v0.6.0 against `scripts/vm-runtime-artifacts.lock`
 and writes `vm-runtime-manifest.json` only after all seven executable artifacts
 are present and hashed. Custom umoci binaries require
-`CAUTEM_VM_UMOCI_SHA256`.
+`QUARSHELL_VM_UMOCI_SHA256`.
 The Linux KVM acceptance also checks that `libkrun.so` and `libkrunfw.so.5`
 are ELF64 shared libraries for the host architecture and records their SHA-256
 values in `vm-runtime-libraries.json`. Those hashes identify the tested inputs;
 they are not a vendor signature or a trusted digest lock.
 The guest agent is cross-compiled with the host Go toolchain, so Docker is not
 needed to build these artifacts. Then set
-`CAUTEM_VM_WORKER` and `CAUTEM_VM_GUEST_AGENT` to the resulting files. Set
+`QUARSHELL_VM_WORKER` and `QUARSHELL_VM_GUEST_AGENT` to the resulting files. Set
 `OPENSHELL_VM_RUNTIME_DIR` to a compatible libkrun runtime bundle and
 `OPENSHELL_VM_DRIVER_STATE_DIR` to override the OpenShell state directory.
 If the runtime override is unset, the driver looks under
@@ -242,10 +242,10 @@ Linux requires read/write access to `/dev/kvm`; preflight opens the configured
 KVM character device and checks its KVM API version, so a regular file or
 unrelated device cannot satisfy the check. macOS support targets Apple
 Silicon with Hypervisor.framework. The macOS build signs the worker with the
-Hypervisor and library-loading entitlements; set `CAUTEM_VM_CODESIGN_IDENTITY`
+Hypervisor and library-loading entitlements; set `QUARSHELL_VM_CODESIGN_IDENTITY`
 to the signing identity for a distributable build (local builds use ad-hoc
 signing). Gateway-launched macOS workers must be trusted either by configured
-`CAUTEM_VM_WORKER_TEAM_ID` or by `CAUTEM_VM_WORKER_SHA256`, which pins the
+`QUARSHELL_VM_WORKER_TEAM_ID` or by `QUARSHELL_VM_WORKER_SHA256`, which pins the
 ad-hoc-signed worker's exact binary digest. The build manifest records that
 digest. The hash-pinned path verifies the ad-hoc code signature and rejects a
 changed worker; use Team ID signing for distributed installs. The worker sets
@@ -253,7 +253,7 @@ its dynamic loader search path from the configured runtime bundle and strips
 inherited loader overrides.
 
 The opt-in live acceptance test exercises guest boot, broker health and an
-actual default-deny HTTP 403 from the Cautem policy engine over guest vsock,
+actual default-deny HTTP 403 from the Quarshell policy engine over guest vsock,
 supervisor control handshake, SSH command execution over vsock, file copy,
 worker recovery, stop/start and delete against a real host hypervisor.
 Provide an ext4 rootfs tar with a `sandbox` user (UID/GID 1000 by default), the
@@ -261,20 +261,20 @@ matching static guest agent and runtime helpers, worker and libkrun bundle, then
 run:
 
 ```sh
-CAUTEM_VM_ACCEPTANCE=1 \
-CAUTEM_VM_TEST_ROOTFS_TAR=/path/to/rootfs.tar \
-CAUTEM_VM_TEST_GUEST_AGENT=/path/to/cautem-vm-guest-agent-linux-arm64 \
-CAUTEM_VM_TEST_INIT_BIN=/path/to/cautem-init-linux-arm64 \
-CAUTEM_VM_TEST_SUPERVISOR_BIN=/path/to/cautem-supervisor-linux-arm64 \
-CAUTEM_VM_TEST_SSH_BIN=/path/to/cautem-sshd-linux-arm64 \
-CAUTEM_VM_TEST_E2FS_FORMATTER=/path/to/mke2fs \
-CAUTEM_VM_WORKER=/path/to/cautem-vm-worker \
+QUARSHELL_VM_ACCEPTANCE=1 \
+QUARSHELL_VM_TEST_ROOTFS_TAR=/path/to/rootfs.tar \
+QUARSHELL_VM_TEST_GUEST_AGENT=/path/to/quarshell-vm-guest-agent-linux-arm64 \
+QUARSHELL_VM_TEST_INIT_BIN=/path/to/quarshell-init-linux-arm64 \
+QUARSHELL_VM_TEST_SUPERVISOR_BIN=/path/to/quarshell-supervisor-linux-arm64 \
+QUARSHELL_VM_TEST_SSH_BIN=/path/to/quarshell-sshd-linux-arm64 \
+QUARSHELL_VM_TEST_E2FS_FORMATTER=/path/to/mke2fs \
+QUARSHELL_VM_WORKER=/path/to/quarshell-vm-worker \
 OPENSHELL_VM_RUNTIME_DIR=/path/to/libkrun-runtime \
 go test -C ../quarshell-driver-vm ./vm -run '^TestLiveMicroVMLifecycle$' -count=1 -v
 ```
 
 For a reproducible Linux KVM run, configure a self-hosted GitHub Actions runner
-with the `cautem-kvm` label, Docker, e2fsprogs, read/write access to `/dev/kvm`,
+with the `quarshell-kvm` label, Docker, e2fsprogs, read/write access to `/dev/kvm`,
 and a compatible Linux libkrun bundle. Set the repository variable
 `OPENSHELL_VM_RUNTIME_DIR` to the bundle path and run the manual **Live VM KVM
 acceptance** workflow, or invoke `scripts/run-live-kvm-acceptance.sh` directly.
@@ -296,7 +296,7 @@ execution, and guest cgroup limits. Both engine-in-MicroVM profiles require a
 native Linux KVM runner.
 
 When `proxy_bin` and `policy_path` are supplied, each VM worker starts its own
-Cautem policy proxy on a mode-0600 Unix socket. libkrun maps guest-initiated
+Quarshell policy proxy on a mode-0600 Unix socket. libkrun maps guest-initiated
 vsock port 5501 to that socket. The guest agent exposes only a loopback HTTP
 proxy and forces workload HTTP(S) proxy variables to it. The VM has no
 virtio-net device, and `krun_add_vsock` receives TSI feature mask `0`, which
@@ -315,7 +315,7 @@ supervisor session.
 
 SSH uses the same host proxy relay pattern as the container backends. The host
 proxy connects to a private UDS mapped through vsock port 5502; inside the VM,
-the guest agent bridges it to `cautem-sshd` on a private Unix socket. The daemon
+the guest agent bridges it to `quarshell-sshd` on a private Unix socket. The daemon
 does not listen on guest TCP, and SSH only becomes available when the policy
 proxy and supervisor relay are configured.
 
@@ -345,4 +345,4 @@ rejects guarantees it does not implement instead of silently ignoring them.
 
 ## License
 
-[Apache-2.0](./LICENSE) © cautem
+[Apache-2.0](./LICENSE) © quarshell

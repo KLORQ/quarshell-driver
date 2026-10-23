@@ -57,7 +57,7 @@ class RequiredGoTestTest(unittest.TestCase):
 				"--test", TEST, "--", sys.executable, "-c", f"print({payload!r})",
 			]
 			environment = os.environ.copy()
-			environment["CAUTEM_VM_TEST_JSON_LOG"] = str(artifact)
+			environment["QUARSHELL_VM_TEST_JSON_LOG"] = str(artifact)
 			result = subprocess.run(command, env=environment, capture_output=True, text=True, check=False)
 			self.assertEqual(result.returncode, 0, result.stderr)
 			written = [json.loads(line) for line in artifact.read_text(encoding="utf-8").splitlines()]

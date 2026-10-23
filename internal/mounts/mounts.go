@@ -2,7 +2,7 @@
 //
 // Host workspace sources use a deny-list (denyBasenames / $HOME) unless --i-know.
 // Guest targets use OpenShell-style reserved roots (controlRoots) so users cannot
-// overwrite /cautem control state — not a general Linux system-path denylist.
+// overwrite /quarshell control state — not a general Linux system-path denylist.
 package mounts
 
 import (
@@ -25,7 +25,7 @@ type WorkspaceSource struct {
 }
 
 // denyBasenames are never auto-mounted as workspace (secrets / cloud CLIs).
-// OpenShell relies more on --upload; cautem still bind-mounts workspace, so this
+// OpenShell relies more on --upload; quarshell still bind-mounts workspace, so this
 // host-side check remains as hardening.
 var denyBasenames = []string{
 	".ssh", ".aws", ".gnupg", ".kube", ".docker", ".config",

@@ -42,17 +42,17 @@ func ResolveWorkspace(path string, iKnow bool) (string, error) {
 	return mounts.ResolveWorkspace(path, iKnow)
 }
 
-// EnsureLinuxCLI builds (if needed) a linux/$GOARCH cautem binary for the proxy sidecar.
+// EnsureLinuxCLI builds (if needed) a linux/$GOARCH quarshell binary for the proxy sidecar.
 func EnsureLinuxCLI(ctx context.Context, moduleDir string) (string, error) {
 	return sidecar.EnsureLinuxCLI(ctx, moduleDir)
 }
 
-// EnsureLinuxInit builds (if needed) a linux cautem-init for harden.
+// EnsureLinuxInit builds (if needed) a linux quarshell-init for harden.
 func EnsureLinuxInit(ctx context.Context, runtimeModuleDir string) (string, error) {
 	return sidecar.EnsureLinuxInit(ctx, runtimeModuleDir)
 }
 
-// EnsureLinuxSSHD builds (if needed) a linux cautem-sshd.
+// EnsureLinuxSSHD builds (if needed) a linux quarshell-sshd.
 func EnsureLinuxSSHD(ctx context.Context, runtimeModuleDir string) (string, error) {
 	return sidecar.EnsureLinuxSSHD(ctx, runtimeModuleDir)
 }

@@ -7,23 +7,23 @@ import (
 	"testing"
 )
 
-func TestBuildCautemRuntimeSecretsSeparatesWorkloadAndProxyCredentials(t *testing.T) {
+func TestBuildQuarshellRuntimeSecretsSeparatesWorkloadAndProxyCredentials(t *testing.T) {
 	identity := agentSandboxCreateIdentity{
-		Namespace: "cautem-ws-123", SandboxID: "sandbox-123", Generation: "gen9",
+		Namespace: "quarshell-ws-123", SandboxID: "sandbox-123", Generation: "gen9",
 		SandboxName: "demo", SandboxUID: "sandbox-uid", APIVersion: "agents.x-k8s.io/v1beta1",
 		WorkloadName: "demo", WorkloadUID: "workload-uid",
 		SupervisorName: "os-supervisor-sandbox-123", SupervisorUID: "supervisor-uid",
 	}
 	policy := []byte("version: 1\nallow_rules: []\n")
-	secrets, err := buildCautemRuntimeSecrets(identity, policy, []string{
-		"CAUTEM_GATEWAY_URL=https://gateway.example:443",
-		"CAUTEM_SANDBOX=demo",
-		"CAUTEM_SANDBOX_TOKEN=secret-token",
-		"CAUTEM_LOG_DIR=/var/log",
+	secrets, err := buildQuarshellRuntimeSecrets(identity, policy, []string{
+		"QUARSHELL_GATEWAY_URL=https://gateway.example:443",
+		"QUARSHELL_SANDBOX=demo",
+		"QUARSHELL_SANDBOX_TOKEN=secret-token",
+		"QUARSHELL_LOG_DIR=/var/log",
 		"OPENAI_API_KEY=provider-secret",
 	})
 	if err != nil {
-		t.Fatalf("buildCautemRuntimeSecrets() error = %v", err)
+		t.Fatalf("buildQuarshellRuntimeSecrets() error = %v", err)
 	}
 	if len(secrets) != 3 {
 		t.Fatalf("secret count = %d; want workload, supervisor and proxy environment Secrets", len(secrets))
@@ -31,19 +31,19 @@ func TestBuildCautemRuntimeSecretsSeparatesWorkloadAndProxyCredentials(t *testin
 	workload := secretData(t, secrets[0])
 	supervisor := secretData(t, secrets[1])
 	proxyEnv := secretData(t, secrets[2])
-	if got := string(decodeSecretValue(t, workload, cautemRuntimePolicyKey)); got != string(policy) {
+	if got := string(decodeSecretValue(t, workload, quarshellRuntimePolicyKey)); got != string(policy) {
 		t.Fatalf("workload policy = %q; want %q", got, policy)
 	}
-	if _, exists := workload[cautemProxyTokenKey]; exists {
+	if _, exists := workload[quarshellProxyTokenKey]; exists {
 		t.Fatal("workload Secret contains the proxy bearer token")
 	}
-	if got := string(decodeSecretValue(t, supervisor, cautemProxyTokenKey)); got != "secret-token\n" {
+	if got := string(decodeSecretValue(t, supervisor, quarshellProxyTokenKey)); got != "secret-token\n" {
 		t.Fatalf("proxy token file content = %q; want newline terminated token", got)
 	}
 	if got := string(decodeSecretValue(t, proxyEnv, "OPENAI_API_KEY")); got != "provider-secret" {
 		t.Fatalf("proxy credential = %q; want provider secret", got)
 	}
-	for _, key := range []string{"CAUTEM_SANDBOX_TOKEN", "CAUTEM_GATEWAY_URL", "CAUTEM_SANDBOX", "CAUTEM_LOG_DIR"} {
+	for _, key := range []string{"QUARSHELL_SANDBOX_TOKEN", "QUARSHELL_GATEWAY_URL", "QUARSHELL_SANDBOX", "QUARSHELL_LOG_DIR"} {
 		if _, exists := proxyEnv[key]; exists {
 			t.Errorf("proxy environment Secret contains runtime field %q", key)
 		}
@@ -71,16 +71,16 @@ func TestBuildCautemRuntimeSecretsSeparatesWorkloadAndProxyCredentials(t *testin
 	}
 }
 
-func TestRotateCautemGenerationSecretsReplacesBearerAndBridgeIdentity(t *testing.T) {
+func TestRotateQuarshellGenerationSecretsReplacesBearerAndBridgeIdentity(t *testing.T) {
 	identity := agentSandboxCreateIdentity{
-		Namespace: "cautem-ws-123", SandboxID: "sandbox-123", Generation: "gen9",
+		Namespace: "quarshell-ws-123", SandboxID: "sandbox-123", Generation: "gen9",
 		SandboxName: "demo", SandboxUID: "sandbox-uid", APIVersion: "agents.x-k8s.io/v1beta1",
 		WorkloadName: "demo", SupervisorName: "os-supervisor-sandbox-123",
 		ServiceIP: "10.96.0.12", ControlServiceIP: "10.96.0.13",
 	}
 	policy := []byte("version: 1\nallow_rules: []\n")
-	current, err := buildCautemGenerationSecrets(identity, policy, []string{
-		"CAUTEM_SANDBOX_TOKEN=old-bearer", "OPENAI_API_KEY=provider-secret",
+	current, err := buildQuarshellGenerationSecrets(identity, policy, []string{
+		"QUARSHELL_SANDBOX_TOKEN=old-bearer", "OPENAI_API_KEY=provider-secret",
 	})
 	if err != nil {
 		t.Fatalf("build current generation: %v", err)
@@ -90,15 +90,15 @@ func TestRotateCautemGenerationSecretsReplacesBearerAndBridgeIdentity(t *testing
 
 	next := identity
 	next.Generation = "gen10"
-	rotated, err := rotateCautemGenerationSecrets(current, identity.Generation, next, "new-bearer")
+	rotated, err := rotateQuarshellGenerationSecrets(current, identity.Generation, next, "new-bearer")
 	if err != nil {
-		t.Fatalf("rotateCautemGenerationSecrets() error = %v", err)
+		t.Fatalf("rotateQuarshellGenerationSecrets() error = %v", err)
 	}
-	if err := validateCautemGenerationSecrets(rotated, next); err != nil {
+	if err := validateQuarshellGenerationSecrets(rotated, next); err != nil {
 		t.Fatalf("rotated generation validation: %v", err)
 	}
 	supervisor := secretData(t, secretByName(t, rotated, generationSecretName("os-supervisor", next.SandboxID, next.Generation)))
-	if got := string(decodeSecretValue(t, supervisor, cautemProxyTokenKey)); got != "new-bearer\n" {
+	if got := string(decodeSecretValue(t, supervisor, quarshellProxyTokenKey)); got != "new-bearer\n" {
 		t.Fatalf("rotated bearer = %q; want new bearer", got)
 	}
 	if got := string(decodeSecretValue(t, supervisor, bridgeControlServerCert)); got == string(oldCert) {
@@ -115,17 +115,17 @@ func TestRotateCautemGenerationSecretsReplacesBearerAndBridgeIdentity(t *testing
 	}
 }
 
-func TestRotateCautemGenerationSecretsUpdatesPolicyAndPreservesBearer(t *testing.T) {
+func TestRotateQuarshellGenerationSecretsUpdatesPolicyAndPreservesBearer(t *testing.T) {
 	identity := agentSandboxCreateIdentity{
-		Namespace: "cautem-ws-123", SandboxID: "sandbox-123", Generation: "gen9",
+		Namespace: "quarshell-ws-123", SandboxID: "sandbox-123", Generation: "gen9",
 		SandboxName: "demo", SandboxUID: "sandbox-uid", APIVersion: "agents.x-k8s.io/v1beta1",
 		WorkloadName: "demo", SupervisorName: "os-supervisor-sandbox-123",
 		ServiceIP: "10.96.0.12", ControlServiceIP: "10.96.0.13",
 	}
-	currentPolicy := []byte("# cautem-policy-revision: 1\nversion: 1\nallow_rules: []\n")
-	updatedPolicy := []byte("# cautem-policy-revision: 2\nversion: 1\nallow_rules: []\ndeny_rules: []\n")
-	current, err := buildCautemGenerationSecrets(identity, currentPolicy, []string{
-		"CAUTEM_SANDBOX_TOKEN=current-bearer", "OPENAI_API_KEY=provider-secret",
+	currentPolicy := []byte("# quarshell-policy-revision: 1\nversion: 1\nallow_rules: []\n")
+	updatedPolicy := []byte("# quarshell-policy-revision: 2\nversion: 1\nallow_rules: []\ndeny_rules: []\n")
+	current, err := buildQuarshellGenerationSecrets(identity, currentPolicy, []string{
+		"QUARSHELL_SANDBOX_TOKEN=current-bearer", "OPENAI_API_KEY=provider-secret",
 	})
 	if err != nil {
 		t.Fatalf("build current generation: %v", err)
@@ -133,11 +133,11 @@ func TestRotateCautemGenerationSecretsUpdatesPolicyAndPreservesBearer(t *testing
 
 	next := identity
 	next.Generation = "gen10"
-	updated, err := rotateCautemGenerationSecretsWithPolicy(current, identity.Generation, next, "current-bearer", updatedPolicy)
+	updated, err := rotateQuarshellGenerationSecretsWithPolicy(current, identity.Generation, next, "current-bearer", updatedPolicy)
 	if err != nil {
-		t.Fatalf("rotateCautemGenerationSecretsWithPolicy() error = %v", err)
+		t.Fatalf("rotateQuarshellGenerationSecretsWithPolicy() error = %v", err)
 	}
-	if err := validateCautemGenerationSecrets(updated, next); err != nil {
+	if err := validateQuarshellGenerationSecrets(updated, next); err != nil {
 		t.Fatalf("updated generation validation: %v", err)
 	}
 	for _, secretName := range []string{
@@ -146,12 +146,12 @@ func TestRotateCautemGenerationSecretsUpdatesPolicyAndPreservesBearer(t *testing
 	} {
 		secret := secretByName(t, updated, secretName)
 		data := secretData(t, secret)
-		if got := decodeSecretValue(t, data, cautemRuntimePolicyKey); string(got) != string(updatedPolicy) {
+		if got := decodeSecretValue(t, data, quarshellRuntimePolicyKey); string(got) != string(updatedPolicy) {
 			t.Errorf("%s policy = %q; want %q", secretName, got, updatedPolicy)
 		}
 	}
 	supervisor := secretData(t, secretByName(t, updated, generationSecretName("os-supervisor", next.SandboxID, next.Generation)))
-	if got := string(decodeSecretValue(t, supervisor, cautemProxyTokenKey)); got != "current-bearer\n" {
+	if got := string(decodeSecretValue(t, supervisor, quarshellProxyTokenKey)); got != "current-bearer\n" {
 		t.Fatalf("policy update changed the sandbox bearer: %q", got)
 	}
 	providerEnv := secretData(t, secretByName(t, updated, generationSecretName(proxyEnvSecretPrefix, next.SandboxID, next.Generation)))
@@ -160,9 +160,9 @@ func TestRotateCautemGenerationSecretsUpdatesPolicyAndPreservesBearer(t *testing
 	}
 }
 
-func TestBuildCautemRuntimeSecretsRejectsUnsafeInputs(t *testing.T) {
+func TestBuildQuarshellRuntimeSecretsRejectsUnsafeInputs(t *testing.T) {
 	identity := agentSandboxCreateIdentity{
-		Namespace: "cautem-ws-123", SandboxID: "sandbox-123", Generation: "gen9",
+		Namespace: "quarshell-ws-123", SandboxID: "sandbox-123", Generation: "gen9",
 		SandboxName: "demo", SandboxUID: "sandbox-uid", APIVersion: "agents.x-k8s.io/v1beta1",
 		WorkloadName: "demo", WorkloadUID: "workload-uid",
 		SupervisorName: "os-supervisor-sandbox-123", SupervisorUID: "supervisor-uid",
@@ -172,51 +172,51 @@ func TestBuildCautemRuntimeSecretsRejectsUnsafeInputs(t *testing.T) {
 		policy   []byte
 		proxyEnv []string
 	}{
-		{name: "empty policy", proxyEnv: []string{"CAUTEM_SANDBOX_TOKEN=token"}},
+		{name: "empty policy", proxyEnv: []string{"QUARSHELL_SANDBOX_TOKEN=token"}},
 		{name: "missing token", policy: []byte("version: 1\n"), proxyEnv: []string{"OPENAI_API_KEY=secret"}},
-		{name: "empty token", policy: []byte("version: 1\n"), proxyEnv: []string{"CAUTEM_SANDBOX_TOKEN= "}},
-		{name: "duplicate runtime key", policy: []byte("version: 1\n"), proxyEnv: []string{"CAUTEM_SANDBOX=demo", "CAUTEM_SANDBOX=other", "CAUTEM_SANDBOX_TOKEN=token"}},
-		{name: "token file override", policy: []byte("version: 1\n"), proxyEnv: []string{"CAUTEM_SANDBOX_TOKEN=token", "CAUTEM_SANDBOX_TOKEN_FILE=/tmp/token"}},
-		{name: "bridge setting override", policy: []byte("version: 1\n"), proxyEnv: []string{"CAUTEM_SANDBOX_TOKEN=token", "CAUTEM_RELAY_TARGET_LISTEN=0.0.0.0:1"}},
-		{name: "invalid env key", policy: []byte("version: 1\n"), proxyEnv: []string{"BAD.KEY=value", "CAUTEM_SANDBOX_TOKEN=token"}},
-		{name: "NUL in env value", policy: []byte("version: 1\n"), proxyEnv: []string{"OPENAI_API_KEY=secret\x00value", "CAUTEM_SANDBOX_TOKEN=token"}},
+		{name: "empty token", policy: []byte("version: 1\n"), proxyEnv: []string{"QUARSHELL_SANDBOX_TOKEN= "}},
+		{name: "duplicate runtime key", policy: []byte("version: 1\n"), proxyEnv: []string{"QUARSHELL_SANDBOX=demo", "QUARSHELL_SANDBOX=other", "QUARSHELL_SANDBOX_TOKEN=token"}},
+		{name: "token file override", policy: []byte("version: 1\n"), proxyEnv: []string{"QUARSHELL_SANDBOX_TOKEN=token", "QUARSHELL_SANDBOX_TOKEN_FILE=/tmp/token"}},
+		{name: "bridge setting override", policy: []byte("version: 1\n"), proxyEnv: []string{"QUARSHELL_SANDBOX_TOKEN=token", "QUARSHELL_RELAY_TARGET_LISTEN=0.0.0.0:1"}},
+		{name: "invalid env key", policy: []byte("version: 1\n"), proxyEnv: []string{"BAD.KEY=value", "QUARSHELL_SANDBOX_TOKEN=token"}},
+		{name: "NUL in env value", policy: []byte("version: 1\n"), proxyEnv: []string{"OPENAI_API_KEY=secret\x00value", "QUARSHELL_SANDBOX_TOKEN=token"}},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			if _, err := buildCautemRuntimeSecrets(identity, test.policy, test.proxyEnv); err == nil {
-				t.Fatal("buildCautemRuntimeSecrets() succeeded; want rejection")
+			if _, err := buildQuarshellRuntimeSecrets(identity, test.policy, test.proxyEnv); err == nil {
+				t.Fatal("buildQuarshellRuntimeSecrets() succeeded; want rejection")
 			}
 		})
 	}
 
 	tooLarge := make([]byte, maxRuntimePolicyBytes+1)
-	if _, err := buildCautemRuntimeSecrets(identity, tooLarge, []string{"CAUTEM_SANDBOX_TOKEN=token"}); err == nil {
-		t.Fatal("buildCautemRuntimeSecrets() accepted an oversized policy")
+	if _, err := buildQuarshellRuntimeSecrets(identity, tooLarge, []string{"QUARSHELL_SANDBOX_TOKEN=token"}); err == nil {
+		t.Fatal("buildQuarshellRuntimeSecrets() accepted an oversized policy")
 	}
 	tooLargeEnv := "OPENAI_API_KEY=" + strings.Repeat("x", maxKubernetesSecretBytes+1)
-	if _, err := buildCautemRuntimeSecrets(identity, []byte("version: 1\n"), []string{"CAUTEM_SANDBOX_TOKEN=token", tooLargeEnv}); err == nil {
-		t.Fatal("buildCautemRuntimeSecrets() accepted an oversized proxy environment Secret")
+	if _, err := buildQuarshellRuntimeSecrets(identity, []byte("version: 1\n"), []string{"QUARSHELL_SANDBOX_TOKEN=token", tooLargeEnv}); err == nil {
+		t.Fatal("buildQuarshellRuntimeSecrets() accepted an oversized proxy environment Secret")
 	}
 	identity.Generation = "---"
-	if _, err := buildCautemRuntimeSecrets(identity, []byte("version: 1\n"), []string{"CAUTEM_SANDBOX_TOKEN=token"}); err == nil || !strings.Contains(err.Error(), "generation") {
-		t.Fatalf("buildCautemRuntimeSecrets() error = %v; want invalid generation", err)
+	if _, err := buildQuarshellRuntimeSecrets(identity, []byte("version: 1\n"), []string{"QUARSHELL_SANDBOX_TOKEN=token"}); err == nil || !strings.Contains(err.Error(), "generation") {
+		t.Fatalf("buildQuarshellRuntimeSecrets() error = %v; want invalid generation", err)
 	}
 }
 
-func TestBuildCautemGenerationSecretsAddsAndValidatesBridgeCredentials(t *testing.T) {
+func TestBuildQuarshellGenerationSecretsAddsAndValidatesBridgeCredentials(t *testing.T) {
 	identity := agentSandboxCreateIdentity{
-		Namespace: "cautem-ws-123", SandboxID: "sandbox-123", Generation: "gen9",
+		Namespace: "quarshell-ws-123", SandboxID: "sandbox-123", Generation: "gen9",
 		SandboxName: "demo", SandboxUID: "sandbox-uid", APIVersion: "agents.x-k8s.io/v1beta1",
 		WorkloadName: "demo", WorkloadUID: "workload-uid",
 		SupervisorName: "os-supervisor-sandbox-123", SupervisorUID: "supervisor-uid",
 		ServiceIP: "10.96.0.12", ControlServiceIP: "10.96.0.13",
 	}
-	secrets, err := buildCautemGenerationSecrets(identity, []byte("version: 1\nallow_rules: []\n"), []string{
-		"CAUTEM_SANDBOX_TOKEN=token",
+	secrets, err := buildQuarshellGenerationSecrets(identity, []byte("version: 1\nallow_rules: []\n"), []string{
+		"QUARSHELL_SANDBOX_TOKEN=token",
 		"OPENAI_API_KEY=provider-secret",
 	})
 	if err != nil {
-		t.Fatalf("buildCautemGenerationSecrets() error = %v", err)
+		t.Fatalf("buildQuarshellGenerationSecrets() error = %v", err)
 	}
 	if len(secrets) != 3 {
 		t.Fatalf("secret count = %d; want three", len(secrets))
@@ -235,26 +235,26 @@ func TestBuildCautemGenerationSecretsAddsAndValidatesBridgeCredentials(t *testin
 	if _, exists := supervisorData[bridgeTargetClientKey]; !exists {
 		t.Fatal("supervisor Secret is missing its target client identity")
 	}
-	if err := validateCautemGenerationSecrets(secrets, identity); err != nil {
-		t.Fatalf("validateCautemGenerationSecrets() error = %v", err)
+	if err := validateQuarshellGenerationSecrets(secrets, identity); err != nil {
+		t.Fatalf("validateQuarshellGenerationSecrets() error = %v", err)
 	}
 
 	bad := cloneSecretObjects(secrets)
 	bad[2]["metadata"].(map[string]any)["ownerReferences"].([]any)[0].(map[string]any)["uid"] = "stale-supervisor-uid"
-	if err := validateCautemGenerationSecrets(bad, identity); err == nil || !strings.Contains(err.Error(), "owner") {
-		t.Fatalf("validateCautemGenerationSecrets() error = %v; want stale owner rejection", err)
+	if err := validateQuarshellGenerationSecrets(bad, identity); err == nil || !strings.Contains(err.Error(), "owner") {
+		t.Fatalf("validateQuarshellGenerationSecrets() error = %v; want stale owner rejection", err)
 	}
 
 	bad = cloneSecretObjects(secrets)
 	bad[0]["data"].(map[string]any)["OPENAI_API_KEY"] = base64.StdEncoding.EncodeToString([]byte("must-stay-in-proxy"))
-	if err := validateCautemGenerationSecrets(bad, identity); err == nil || !strings.Contains(err.Error(), "unexpected key") {
-		t.Fatalf("validateCautemGenerationSecrets() error = %v; want workload credential rejection", err)
+	if err := validateQuarshellGenerationSecrets(bad, identity); err == nil || !strings.Contains(err.Error(), "unexpected key") {
+		t.Fatalf("validateQuarshellGenerationSecrets() error = %v; want workload credential rejection", err)
 	}
 
 	bad = cloneSecretObjects(secrets)
-	bad[2]["data"].(map[string]any)["CAUTEM_SANDBOX_TOKEN"] = base64.StdEncoding.EncodeToString([]byte("must-stay-in-file"))
-	if err := validateCautemGenerationSecrets(bad, identity); err == nil || !strings.Contains(err.Error(), "managed") {
-		t.Fatalf("validateCautemGenerationSecrets() error = %v; want managed credential rejection", err)
+	bad[2]["data"].(map[string]any)["QUARSHELL_SANDBOX_TOKEN"] = base64.StdEncoding.EncodeToString([]byte("must-stay-in-file"))
+	if err := validateQuarshellGenerationSecrets(bad, identity); err == nil || !strings.Contains(err.Error(), "managed") {
+		t.Fatalf("validateQuarshellGenerationSecrets() error = %v; want managed credential rejection", err)
 	}
 }
 

@@ -81,7 +81,7 @@ func (backend *dynamicAgentSandboxCreateBackend) ListWorkspaceNamespaces(ctx con
 	for i := range namespaces.Items {
 		namespace := &namespaces.Items[i]
 		labels := namespace.GetLabels()
-		if labels[workspaceManagedByLabel] != "cautem" || labels[workspaceGatewayHashLabel] != wantGatewayHash || !validWorkspaceIdentityHash(labels[workspaceIdentityHashLabel]) {
+		if labels[workspaceManagedByLabel] != "quarshell" || labels[workspaceGatewayHashLabel] != wantGatewayHash || !validWorkspaceIdentityHash(labels[workspaceIdentityHashLabel]) {
 			continue
 		}
 		phase, _, _ := unstructured.NestedString(namespace.Object, "status", "phase")

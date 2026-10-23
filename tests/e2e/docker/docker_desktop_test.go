@@ -23,13 +23,13 @@ import (
 // daemon must see the same absolute workspace path through Docker Desktop's
 // host file sharing.
 func TestDockerDesktopWorkspaceBindE2E(t *testing.T) {
-	if os.Getenv("CAUTEM_DOCKER_DESKTOP_E2E") != "1" {
-		t.Skip("set CAUTEM_DOCKER_DESKTOP_E2E=1 to run against Docker Desktop")
+	if os.Getenv("QUARSHELL_DOCKER_DESKTOP_E2E") != "1" {
+		t.Skip("set QUARSHELL_DOCKER_DESKTOP_E2E=1 to run against Docker Desktop")
 	}
-	workspace := strings.TrimSpace(os.Getenv("CAUTEM_DOCKER_WORKSPACE"))
-	image := strings.TrimSpace(os.Getenv("CAUTEM_E2E_SANDBOX_IMAGE"))
+	workspace := strings.TrimSpace(os.Getenv("QUARSHELL_DOCKER_WORKSPACE"))
+	image := strings.TrimSpace(os.Getenv("QUARSHELL_E2E_SANDBOX_IMAGE"))
 	if workspace == "" || image == "" {
-		t.Fatal("CAUTEM_DOCKER_WORKSPACE and CAUTEM_E2E_SANDBOX_IMAGE are required")
+		t.Fatal("QUARSHELL_DOCKER_WORKSPACE and QUARSHELL_E2E_SANDBOX_IMAGE are required")
 	}
 	if err := os.MkdirAll(workspace, 0o777); err != nil {
 		t.Fatal(err)
@@ -49,7 +49,7 @@ func TestDockerDesktopWorkspaceBindE2E(t *testing.T) {
 	}
 	engine := docker.NewFromClientWithRuntimeConfig(cli, docker.RuntimeConfig{
 		ImagePullPolicy: "missing",
-		NetworkName:     "cautem-docker-desktop-e2e",
+		NetworkName:     "quarshell-docker-desktop-e2e",
 	})
 	defer engine.Close()
 
@@ -103,15 +103,15 @@ func TestDockerDesktopWorkspaceBindE2E(t *testing.T) {
 // can reach the macOS host service through Docker Desktop, then verifies that
 // the proxy-isolated sandbox cannot use the same route to bypass its broker.
 func TestDockerDesktopHostGatewayIsolationE2E(t *testing.T) {
-	if os.Getenv("CAUTEM_DOCKER_DESKTOP_HOST_BOUNDARY_E2E") != "1" {
-		t.Skip("set CAUTEM_DOCKER_DESKTOP_HOST_BOUNDARY_E2E=1 to run the host-boundary lane")
+	if os.Getenv("QUARSHELL_DOCKER_DESKTOP_HOST_BOUNDARY_E2E") != "1" {
+		t.Skip("set QUARSHELL_DOCKER_DESKTOP_HOST_BOUNDARY_E2E=1 to run the host-boundary lane")
 	}
-	workspace := strings.TrimSpace(os.Getenv("CAUTEM_DOCKER_WORKSPACE"))
-	image := strings.TrimSpace(os.Getenv("CAUTEM_E2E_SANDBOX_IMAGE"))
-	helperDir := strings.TrimSpace(os.Getenv("CAUTEM_HELPERS_DIR"))
-	proxyImage := strings.TrimSpace(os.Getenv("CAUTEM_PROXY_IMAGE"))
+	workspace := strings.TrimSpace(os.Getenv("QUARSHELL_DOCKER_WORKSPACE"))
+	image := strings.TrimSpace(os.Getenv("QUARSHELL_E2E_SANDBOX_IMAGE"))
+	helperDir := strings.TrimSpace(os.Getenv("QUARSHELL_HELPERS_DIR"))
+	proxyImage := strings.TrimSpace(os.Getenv("QUARSHELL_PROXY_IMAGE"))
 	if workspace == "" || image == "" || helperDir == "" || proxyImage == "" {
-		t.Fatal("CAUTEM_DOCKER_WORKSPACE, CAUTEM_E2E_SANDBOX_IMAGE, CAUTEM_HELPERS_DIR and CAUTEM_PROXY_IMAGE are required")
+		t.Fatal("QUARSHELL_DOCKER_WORKSPACE, QUARSHELL_E2E_SANDBOX_IMAGE, QUARSHELL_HELPERS_DIR and QUARSHELL_PROXY_IMAGE are required")
 	}
 	if err := os.MkdirAll(workspace, 0o755); err != nil {
 		t.Fatal(err)
@@ -134,7 +134,7 @@ func TestDockerDesktopHostGatewayIsolationE2E(t *testing.T) {
 		t.Fatal(err)
 	}
 	runID := strconv.FormatInt(time.Now().UnixNano(), 36)
-	networkPrefix := "cautem-docker-desktop-host-boundary"
+	networkPrefix := "quarshell-docker-desktop-host-boundary"
 	engine := docker.NewFromClientWithRuntimeConfig(cli, docker.RuntimeConfig{
 		ImagePullPolicy: "missing",
 		NetworkName:     networkPrefix,
@@ -158,7 +158,7 @@ func TestDockerDesktopHostGatewayIsolationE2E(t *testing.T) {
 		}
 		for _, target := range targets {
 			result, err := engine.Exec(ctx, handle.ID, driver.ExecRequest{Argv: []string{
-				"/usr/local/bin/cautem-tcp-echo", "probe-tcp", target,
+				"/usr/local/bin/quarshell-tcp-echo", "probe-tcp", target,
 			}})
 			if err != nil || result.ExitCode != wantExit {
 				t.Fatalf("sandbox %s host-route probe %s result=%+v err=%v; want exit %d", name, target, result, err, wantExit)
@@ -174,7 +174,7 @@ func TestDockerDesktopHostGatewayIsolationE2E(t *testing.T) {
 	ipv6Enabled := true
 	if _, err := cli.NetworkCreate(ctx, publicNetwork, client.NetworkCreateOptions{
 		Driver: "bridge", EnableIPv6: &ipv6Enabled,
-		Labels: map[string]string{"cautem.sandbox": "1", "cautem.name": base.Name, "cautem.role": "network"},
+		Labels: map[string]string{"quarshell.sandbox": "1", "quarshell.name": base.Name, "quarshell.role": "network"},
 	}); err != nil {
 		t.Fatalf("create dual-stack control network: %v", err)
 	}
@@ -192,7 +192,7 @@ func TestDockerDesktopHostGatewayIsolationE2E(t *testing.T) {
 	isolated := sandboxFixtureSpec{
 		Name: "desktop-host-blocked-" + runID, Image: image, Workspace: workspace,
 		Command: []string{"/bin/sh", "-c", "sleep 300"}, NoHarden: true,
-		ProxyBin: filepath.Join(helperDir, "cautem"), ProxyImage: proxyImage, PolicyPath: policyPath,
+		ProxyBin: filepath.Join(helperDir, "quarshell"), ProxyImage: proxyImage, PolicyPath: policyPath,
 	}
 	probe(isolated.Name, isolated, []string{ipv4Target, ipv6Target}, 0)
 	if ipv4Accepted.Load() != ipv4ConnectionsBeforeIsolation || ipv6Accepted.Load() != ipv6ConnectionsBeforeIsolation {

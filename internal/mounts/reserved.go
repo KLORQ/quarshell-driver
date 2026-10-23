@@ -8,18 +8,18 @@ import (
 	"github.com/KLORQ/quarshell-core/defaults"
 )
 
-// OpenShell-aligned guest reserved roots (cautem control plane + OCI runtime mounts).
+// OpenShell-aligned guest reserved roots (quarshell control plane + OCI runtime mounts).
 // Intentionally not a general Linux system-path denylist for host sources —
 // host workspace secrets use denyBasenames / ResolveWorkspace instead.
 var (
-	// controlRoots are in-guest paths owned by cautem (must not be user-mounted over).
+	// controlRoots are in-guest paths owned by quarshell (must not be user-mounted over).
 	controlRoots = []string{
 		defaults.GuestRoot,
 		defaults.GuestEtcOSG,
-		"/run/cautem",
+		"/run/quarshell",
 		"/run/netns",
 		"/var/run/netns",
-		"/var/run/cautem",
+		"/var/run/quarshell",
 	}
 	// ociRuntimeMountRoots must not be used as workspace or user bind targets.
 	ociRuntimeMountRoots = []string{

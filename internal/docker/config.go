@@ -85,7 +85,7 @@ func ConfigFromMap(values map[string]any) (RuntimeConfig, string, error) {
 			if err == nil && cfg.SandboxSSHSocketPath == "" {
 				err = fmt.Errorf("ssh_socket_path must not be empty when set")
 			}
-		case "cautem_internal_cleanup_manifest_dir":
+		case "quarshell_internal_cleanup_manifest_dir":
 			cfg.CleanupManifestDir, err = configString(value)
 		case "sandbox_pids_limit":
 			cfg.PidsLimit, err = configInt64(value)

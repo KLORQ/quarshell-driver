@@ -11,13 +11,13 @@ import (
 )
 
 func TestSocketCandidatesOrder(t *testing.T) {
-	t.Setenv("CAUTEM_PODMAN_SOCKET", "/tmp/cautem-podman-test.sock")
+	t.Setenv("QUARSHELL_PODMAN_SOCKET", "/tmp/quarshell-podman-test.sock")
 	t.Setenv("XDG_RUNTIME_DIR", "/tmp/xdg-runtime-test")
 	c := socketCandidates()
 	if len(c) < 2 {
 		t.Fatalf("candidates=%v", c)
 	}
-	if c[0] != "/tmp/cautem-podman-test.sock" {
+	if c[0] != "/tmp/quarshell-podman-test.sock" {
 		t.Fatalf("first=%q", c[0])
 	}
 	wantXDG := filepath.Join("/tmp/xdg-runtime-test", "podman", "podman.sock")
@@ -38,11 +38,11 @@ func TestResolveHostPrefersDOCKER_HOST(t *testing.T) {
 
 func TestConfigFromMapAcceptsAbsoluteCleanupManifestDirectory(t *testing.T) {
 	manifestDir := filepath.Join(t.TempDir(), "cleanup")
-	cfg, err := ConfigFromMap(map[string]any{"cautem_internal_cleanup_manifest_dir": manifestDir})
+	cfg, err := ConfigFromMap(map[string]any{"quarshell_internal_cleanup_manifest_dir": manifestDir})
 	if err != nil || cfg.CleanupManifestDir != manifestDir {
 		t.Fatalf("cleanup manifest config=%q err=%v", cfg.CleanupManifestDir, err)
 	}
-	if _, err := ConfigFromMap(map[string]any{"cautem_internal_cleanup_manifest_dir": "relative/cleanup"}); err == nil {
+	if _, err := ConfigFromMap(map[string]any{"quarshell_internal_cleanup_manifest_dir": "relative/cleanup"}); err == nil {
 		t.Fatal("accepted relative cleanup manifest directory")
 	}
 }
@@ -123,7 +123,7 @@ func TestConfigFromMapRejectsExplicitNullForEverySupportedField(t *testing.T) {
 		"socket_path", "default_image", "network_name", "host_gateway_ip", "guest_tls_ca", "guest_tls_cert", "guest_tls_key",
 		"https_proxy", "no_proxy", "proxy_auth_file", "proxy_auth_allow_insecure", "proxy_connect_by_hostname", "proxy_ca_bundle",
 		"registry_auth_file", "egress_ca_bundle", "reconcile_data_ownership", "image_pull_policy", "provider_spiffe_workload_api_socket",
-		"grpc_endpoint", "ssh_socket_path", "sandbox_ssh_socket_path", "cautem_internal_cleanup_manifest_dir", "stop_timeout_secs", "gateway_port",
+		"grpc_endpoint", "ssh_socket_path", "sandbox_ssh_socket_path", "quarshell_internal_cleanup_manifest_dir", "stop_timeout_secs", "gateway_port",
 		"sandbox_pids_limit", "enable_bind_mounts", "health_check_interval_secs", "userns", "uidmap", "gidmap",
 		"app_armor_profile", "allow_driver_config", "resource_admission",
 	}
@@ -251,7 +251,7 @@ func TestConfigFromMapValidatesAndAppliesUpstreamProxySettings(t *testing.T) {
 }
 
 func TestDiscoverSocketMissing(t *testing.T) {
-	t.Setenv("CAUTEM_PODMAN_SOCKET", "/tmp/definitely-missing-cautem-podman.sock")
+	t.Setenv("QUARSHELL_PODMAN_SOCKET", "/tmp/definitely-missing-quarshell-podman.sock")
 	t.Setenv("XDG_RUNTIME_DIR", "/tmp/xdg-missing-"+t.Name())
 	t.Setenv("DOCKER_HOST", "")
 	t.Setenv("CONTAINER_HOST", "")
@@ -261,7 +261,7 @@ func TestDiscoverSocketMissing(t *testing.T) {
 	_, err := DiscoverSocket()
 	if err == nil {
 		// podman CLI may still succeed on developer machines — accept either
-		if _, lookErr := os.Stat("/tmp/definitely-missing-cautem-podman.sock"); lookErr == nil {
+		if _, lookErr := os.Stat("/tmp/definitely-missing-quarshell-podman.sock"); lookErr == nil {
 			t.Fatal("unexpected")
 		}
 	}

@@ -116,7 +116,7 @@ func ConfigFromMap(values map[string]any) (Config, error) {
 				err = fmt.Errorf("ssh_socket_path must not be empty when set")
 			}
 			sshSocketPathConfigured = true
-		case "cautem_internal_cleanup_manifest_dir":
+		case "quarshell_internal_cleanup_manifest_dir":
 			cfg.CleanupManifestDir, err = stringValue(value)
 		case "stop_timeout_secs":
 			cfg.StopTimeoutSecs, err = intValue(value)

@@ -45,15 +45,15 @@ func workloadIdentityFromPod(pod *unstructured.Unstructured, requestedResource m
 	agent := namedContainer(spec, "containers", "agent")
 	bootstrap := namedContainer(spec, "initContainers", sandboxBootstrapVolume)
 	secret := podSecretReference(spec, sandboxBootstrapVolume)
-	cautemSecret := podSecretReference(spec, cautemWorkloadCredentialName)
-	if cautemSecret != "" {
-		secret = cautemSecret
+	quarshellSecret := podSecretReference(spec, quarshellWorkloadCredentialName)
+	if quarshellSecret != "" {
+		secret = quarshellSecret
 	}
 	projected, _ := projectedServiceAccountToken(spec)
 	requestedSpec, _, _ := unstructured.NestedMap(requestedResource, "spec", "podTemplate", "spec")
 	expectedAgent := namedContainer(requestedSpec, "containers", "agent")
-	actualSSHD := namedContainer(spec, "containers", cautemWorkloadSSHDName)
-	expectedSSHD := namedContainer(requestedSpec, "containers", cautemWorkloadSSHDName)
+	actualSSHD := namedContainer(spec, "containers", quarshellWorkloadSSHDName)
+	expectedSSHD := namedContainer(requestedSpec, "containers", quarshellWorkloadSSHDName)
 	expectedSecurityContext, _, _ := unstructured.NestedMap(requestedSpec, "securityContext")
 	expectedVolumes := sandboxPodVolumesWithClaimTemplates(requestedResource, requestedSpec)
 	actualInit := sliceValue(spec["initContainers"])
@@ -76,11 +76,11 @@ func workloadIdentityFromPod(pod *unstructured.Unstructured, requestedResource m
 		RuntimeDefaultSeccomp:                   podUsesRuntimeDefaultSeccomp(spec),
 		DropAllCapabilities:                     containerDropsAllCapabilities(containerSecurity(agent)),
 		PrivilegeEscalationDisabled:             containerSecurity(agent)["allowPrivilegeEscalation"] == false,
-		AdditionalApplicationContainers:         !workloadContainerNamesMatch(sliceValue(spec["containers"]), cautemSecret != ""),
+		AdditionalApplicationContainers:         !workloadContainerNamesMatch(sliceValue(spec["containers"]), quarshellSecret != ""),
 		OtherInitContainersMountBootstrapSecret: otherInitContainerMountsSecret(spec, sandboxBootstrapVolume),
-		CautemAgentMountsPrivateSecret:          containerMountsVolume(agent, cautemWorkloadCredentialName),
-		CautemInitMountsPrivateSecret:           anyInitContainerMountsVolume(spec, cautemWorkloadCredentialName),
-		CautemSSHDContainerMatches:              cautemSecret != "" && containerSpecMatches(actualSSHD, expectedSSHD),
+		QuarshellAgentMountsPrivateSecret:       containerMountsVolume(agent, quarshellWorkloadCredentialName),
+		QuarshellInitMountsPrivateSecret:        anyInitContainerMountsVolume(spec, quarshellWorkloadCredentialName),
+		QuarshellSSHDContainerMatches:           quarshellSecret != "" && containerSpecMatches(actualSSHD, expectedSSHD),
 		InitContainerNames:                      initContainerNames(spec),
 		AgentContainerMatches:                   containerSpecMatches(agent, expectedAgent),
 		InitContainerSpecsMatch:                 initContainerListsMatch(actualInit, expectedInit),
@@ -90,15 +90,15 @@ func workloadIdentityFromPod(pod *unstructured.Unstructured, requestedResource m
 	}
 }
 
-func workloadContainerNamesMatch(containers []any, cautem bool) bool {
-	if !cautem {
+func workloadContainerNamesMatch(containers []any, quarshell bool) bool {
+	if !quarshell {
 		return len(containers) == 1 && namedContainer(map[string]any{"containers": containers}, "containers", "agent") != nil
 	}
 	if len(containers) != 2 {
 		return false
 	}
 	return namedContainer(map[string]any{"containers": containers}, "containers", "agent") != nil &&
-		namedContainer(map[string]any{"containers": containers}, "containers", cautemWorkloadSSHDName) != nil
+		namedContainer(map[string]any{"containers": containers}, "containers", quarshellWorkloadSSHDName) != nil
 }
 
 func anyInitContainerMountsVolume(podSpec map[string]any, volumeName string) bool {

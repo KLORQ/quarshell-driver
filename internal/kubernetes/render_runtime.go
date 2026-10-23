@@ -16,8 +16,8 @@ const (
 	supervisorHealthSocketPath   = "/run/openshell/health.sock"
 	supervisorHealthPort         = int64(5501)
 	supervisorControlPort        = int64(5502)
-	workloadFencePrefix          = "cautem-workload-fence-"
-	supervisorEgressPolicyPrefix = "cautem-supervisor-egress-"
+	workloadFencePrefix          = "quarshell-workload-fence-"
+	supervisorEgressPolicyPrefix = "quarshell-supervisor-egress-"
 	workloadFenceComponent       = "sandbox-workload-fence"
 	supervisorFenceComponent     = "sandbox-supervisor-egress"
 )
@@ -26,28 +26,28 @@ const (
 // API has assigned its UID. The returned resources are still pure render
 // output; Create must apply and observe the fence before releasing either pod.
 type agentSandboxRuntimeRenderParams struct {
-	Namespace                  string
-	SandboxResourceName        string
-	SandboxResourceAPIVersion  string
-	SandboxResourceUID         string
-	SandboxID                  string
-	SandboxName                string
-	Workspace                  string
-	GatewayID                  string
-	Generation                 string
-	SupervisorImage            string
-	CautemProxyImage           string
-	CautemProxyImagePullPolicy string
-	CautemGatewayURL           string
-	CautemGatewayGRPCEndpoint  string
-	CautemGatewayTLS           bool
-	ServiceAccountName         string
-	GatewayEndpoint            string
-	ImagePullSecrets           []string
-	ControlUID                 int64
-	ControlGID                 int64
-	BoundaryPort               int64
-	SATokenTTLSeconds          int64
+	Namespace                     string
+	SandboxResourceName           string
+	SandboxResourceAPIVersion     string
+	SandboxResourceUID            string
+	SandboxID                     string
+	SandboxName                   string
+	Workspace                     string
+	GatewayID                     string
+	Generation                    string
+	SupervisorImage               string
+	QuarshellProxyImage           string
+	QuarshellProxyImagePullPolicy string
+	QuarshellGatewayURL           string
+	QuarshellGatewayGRPCEndpoint  string
+	QuarshellGatewayTLS           bool
+	ServiceAccountName            string
+	GatewayEndpoint               string
+	ImagePullSecrets              []string
+	ControlUID                    int64
+	ControlGID                    int64
+	BoundaryPort                  int64
+	SATokenTTLSeconds             int64
 }
 
 // renderAgentSandboxRuntimeResources renders the supervisor companion, the
@@ -144,7 +144,7 @@ func renderAgentSandboxRuntimeResources(input agentSandboxRuntimeRenderParams) (
 			},
 			"ports": []any{map[string]any{
 				"name": "proxy", "protocol": "TCP",
-				"port": cautemProxyListenPort, "targetPort": cautemProxyListenPort,
+				"port": quarshellProxyListenPort, "targetPort": quarshellProxyListenPort,
 			}},
 		},
 	}
@@ -235,19 +235,19 @@ func renderAgentSandboxRuntimeResources(input agentSandboxRuntimeRenderParams) (
 			},
 		},
 	}
-	if params.CautemProxyImage != "" {
-		supervisorPod, err = renderCautemProxyPod(cautemProxyPodRenderParams{
+	if params.QuarshellProxyImage != "" {
+		supervisorPod, err = renderQuarshellProxyPod(quarshellProxyPodRenderParams{
 			Namespace: params.Namespace, SandboxResourceName: params.SandboxResourceName,
 			SandboxResourceAPIVersion: params.SandboxResourceAPIVersion, SandboxResourceUID: params.SandboxResourceUID,
 			SandboxID: params.SandboxID, SandboxName: params.SandboxName, Generation: params.Generation,
-			ProxyImage: params.CautemProxyImage, ProxyImagePullPolicy: params.CautemProxyImagePullPolicy,
+			ProxyImage: params.QuarshellProxyImage, ProxyImagePullPolicy: params.QuarshellProxyImagePullPolicy,
 			ServiceAccountName: params.ServiceAccountName, ImagePullSecrets: params.ImagePullSecrets,
-			GatewayURL: params.CautemGatewayURL, GatewayGRPCEndpoint: params.CautemGatewayGRPCEndpoint,
-			GatewayTLS:   params.CautemGatewayTLS,
+			GatewayURL: params.QuarshellGatewayURL, GatewayGRPCEndpoint: params.QuarshellGatewayGRPCEndpoint,
+			GatewayTLS:   params.QuarshellGatewayTLS,
 			BoundaryPort: params.BoundaryPort, ControlUID: params.ControlUID, ControlGID: params.ControlGID,
 		})
 		if err != nil {
-			return nil, fmt.Errorf("render Cautem proxy Pod: %w", err)
+			return nil, fmt.Errorf("render Quarshell proxy Pod: %w", err)
 		}
 	}
 
@@ -328,7 +328,7 @@ func renderAgentSandboxRuntimeFence(namespace, sandboxID string, boundaryPort in
 					}}}},
 					"ports": []any{
 						map[string]any{"port": supervisorControlPort, "protocol": "TCP"},
-						map[string]any{"port": cautemProxyListenPort, "protocol": "TCP"},
+						map[string]any{"port": quarshellProxyListenPort, "protocol": "TCP"},
 					},
 				},
 				kubernetesDNSPolicyEgressRule(),
@@ -356,7 +356,7 @@ func renderAgentSandboxRuntimeFence(namespace, sandboxID string, boundaryPort in
 				}}}},
 				"ports": []any{
 					map[string]any{"port": supervisorControlPort, "protocol": "TCP"},
-					map[string]any{"port": cautemProxyListenPort, "protocol": "TCP"},
+					map[string]any{"port": quarshellProxyListenPort, "protocol": "TCP"},
 				},
 			}},
 			"egress": []any{map[string]any{}},
@@ -422,7 +422,7 @@ func validateAgentSandboxRuntimeRenderParams(input agentSandboxRuntimeRenderPara
 	if generationSuffix(params.Generation) == "" {
 		return params, fmt.Errorf("sandbox runtime generation %q must contain an ASCII letter or digit", params.Generation)
 	}
-	if params.CautemProxyImage == "" {
+	if params.QuarshellProxyImage == "" {
 		if strings.TrimSpace(params.SupervisorImage) == "" {
 			return params, fmt.Errorf("supervisor image is required")
 		}
@@ -442,7 +442,7 @@ func validateAgentSandboxRuntimeRenderParams(input agentSandboxRuntimeRenderPara
 	if params.BoundaryPort < 1024 || params.BoundaryPort > 65535 {
 		return params, fmt.Errorf("sandbox runtime boundary port must be between 1024 and 65535")
 	}
-	if params.CautemProxyImage == "" && (params.SATokenTTLSeconds < 600 || params.SATokenTTLSeconds > 86400) {
+	if params.QuarshellProxyImage == "" && (params.SATokenTTLSeconds < 600 || params.SATokenTTLSeconds > 86400) {
 		return params, fmt.Errorf("projected service-account token TTL must be between 600 and 86400 seconds")
 	}
 	seenPullSecrets := make(map[string]struct{}, len(params.ImagePullSecrets))

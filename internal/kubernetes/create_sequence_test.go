@@ -41,43 +41,43 @@ func TestCompatAgentSandboxCreateSequenceFencesBeforeCreateAndReleasesLast(t *te
 	}
 }
 
-func TestCautemAgentSandboxCreateSequenceUsesSplitGenerationSecrets(t *testing.T) {
+func TestQuarshellAgentSandboxCreateSequenceUsesSplitGenerationSecrets(t *testing.T) {
 	backend := newFakeAgentSandboxCreateBackend()
-	workloadParams := testCautemWorkloadRenderParams()
+	workloadParams := testQuarshellWorkloadRenderParams()
 	workloadParams.Base.Generation = "gen1"
-	resource, err := renderCautemAgentSandboxResource(SandboxDriverConfig{}, workloadParams)
+	resource, err := renderQuarshellAgentSandboxResource(SandboxDriverConfig{}, workloadParams)
 	if err != nil {
-		t.Fatalf("renderCautemAgentSandboxResource() error = %v", err)
+		t.Fatalf("renderQuarshellAgentSandboxResource() error = %v", err)
 	}
 	runtimeParams := testAgentSandboxRuntimeRenderParams()
 	runtimeParams.Generation = "gen1"
 	runtimeParams.SandboxResourceUID = ""
 	runtimeParams.SupervisorImage = ""
 	runtimeParams.GatewayEndpoint = ""
-	runtimeParams.CautemProxyImage = "ghcr.io/cautem/quarshell-proxy@sha256:" + strings.Repeat("b", 64)
-	runtimeParams.CautemGatewayURL = "http://gateway.example:443"
-	runtimeParams.CautemGatewayGRPCEndpoint = "gateway.example:7443"
-	backend.supervisor.Image = runtimeParams.CautemProxyImage
-	backend.supervisor.Command = cautemProxyCommandStrings()
+	runtimeParams.QuarshellProxyImage = "ghcr.io/quarshell/quarshell-proxy@sha256:" + strings.Repeat("b", 64)
+	runtimeParams.QuarshellGatewayURL = "http://gateway.example:443"
+	runtimeParams.QuarshellGatewayGRPCEndpoint = "gateway.example:7443"
+	backend.supervisor.Image = runtimeParams.QuarshellProxyImage
+	backend.supervisor.Command = quarshellProxyCommandStrings()
 	backend.supervisor.ProjectedTokenAudience = ""
 	backend.supervisor.HasProjectedServiceAccountToken = false
 	backend.supervisor.BootstrapSecretName = generationSecretName("os-supervisor", runtimeParams.SandboxID, runtimeParams.Generation)
 	backend.supervisor.ProviderEnvSecretName = generationSecretName(proxyEnvSecretPrefix, runtimeParams.SandboxID, runtimeParams.Generation)
-	backend.supervisor.CautemContainerMatches = true
-	backend.supervisor.CautemVolumeSourcesMatch = true
-	backend.workload.Command = []string{cautemWorkloadRuntimeDir + "/cautem-supervisor"}
+	backend.supervisor.QuarshellContainerMatches = true
+	backend.supervisor.QuarshellVolumeSourcesMatch = true
+	backend.workload.Command = []string{quarshellWorkloadRuntimeDir + "/quarshell-supervisor"}
 	backend.workload.SandboxBootstrapSecret = generationSecretName("os-sandbox", runtimeParams.SandboxID, runtimeParams.Generation)
-	backend.workload.InitContainerNames = []string{cautemWorkloadRuntimeInit, workspaceSeedContainerName}
+	backend.workload.InitContainerNames = []string{quarshellWorkloadRuntimeInit, workspaceSeedContainerName}
 	backend.workload.TrustedInitMountsBootstrapSecret = false
-	backend.workload.CautemAgentMountsPrivateSecret = true
-	backend.workload.CautemInitMountsPrivateSecret = false
-	backend.workload.CautemSSHDContainerMatches = true
+	backend.workload.QuarshellAgentMountsPrivateSecret = true
+	backend.workload.QuarshellInitMountsPrivateSecret = false
+	backend.workload.QuarshellSSHDContainerMatches = true
 
 	input := agentSandboxCreateSequenceInput{
 		SandboxResource: resource,
 		RuntimeParams:   runtimeParams,
-		BuildCautemSecrets: func(identity agentSandboxCreateIdentity) ([]map[string]any, error) {
-			return buildCautemGenerationSecrets(identity, []byte("version: 1\n"), []string{"CAUTEM_SANDBOX_TOKEN=test-token", "OPENAI_API_KEY=test-provider-key"})
+		BuildQuarshellSecrets: func(identity agentSandboxCreateIdentity) ([]map[string]any, error) {
+			return buildQuarshellGenerationSecrets(identity, []byte("version: 1\n"), []string{"QUARSHELL_SANDBOX_TOKEN=test-token", "OPENAI_API_KEY=test-provider-key"})
 		},
 	}
 	if _, err := runAgentSandboxCreateSequence(context.Background(), backend, input); err != nil {
@@ -304,20 +304,20 @@ func testBootstrapSecret(name, namespace, ownerKind, ownerName, ownerUID string,
 }
 
 type fakeAgentSandboxCreateBackend struct {
-	calls                  []string
-	failAt                 string
-	failDelete             bool
-	incompleteFence        bool
-	injected               error
-	rollbackErr            error
-	sandbox                agentSandboxResourceIdentity
-	sandboxID              string
-	supervisor             agentSandboxPodIdentity
-	workload               agentSandboxWorkloadIdentity
-	createdSecrets         []map[string]any
-	useRequestedCautemPods bool
-	controlService         agentSandboxServiceIdentity
-	sandboxDeleted         bool
+	calls                     []string
+	failAt                    string
+	failDelete                bool
+	incompleteFence           bool
+	injected                  error
+	rollbackErr               error
+	sandbox                   agentSandboxResourceIdentity
+	sandboxID                 string
+	supervisor                agentSandboxPodIdentity
+	workload                  agentSandboxWorkloadIdentity
+	createdSecrets            []map[string]any
+	useRequestedQuarshellPods bool
+	controlService            agentSandboxServiceIdentity
+	sandboxDeleted            bool
 }
 
 func newFakeAgentSandboxCreateBackend() *fakeAgentSandboxCreateBackend {
@@ -430,7 +430,7 @@ func (backend *fakeAgentSandboxCreateBackend) CreateGatedSupervisor(_ context.Co
 	if err := backend.step("create-gated-supervisor"); err != nil {
 		return agentSandboxPodIdentity{}, err
 	}
-	if backend.useRequestedCautemPods {
+	if backend.useRequestedQuarshellPods {
 		metadata, _ := resource["metadata"].(map[string]any)
 		metadata["uid"] = "supervisor-pod-uid"
 		return supervisorIdentityFromPod(&unstructured.Unstructured{Object: resource}, resource), nil
@@ -446,7 +446,7 @@ func (backend *fakeAgentSandboxCreateBackend) WaitForGatedWorkload(_ context.Con
 	if err := backend.step("wait-for-gated-workload"); err != nil {
 		return agentSandboxWorkloadIdentity{}, err
 	}
-	if backend.useRequestedCautemPods {
+	if backend.useRequestedQuarshellPods {
 		spec, _, _ := unstructured.NestedMap(requestedResource, "spec", "podTemplate", "spec")
 		actualSpec := cloneAnyMap(spec)
 		actualSpec["volumes"] = sandboxPodVolumesWithClaimTemplates(requestedResource, spec)

@@ -66,14 +66,14 @@ func TestAttachRuntimeBridgeCredentialsRequiresBothServiceIPs(t *testing.T) {
 
 func TestRuntimeBridgeCertificatesNeedRefreshBeforeExpiry(t *testing.T) {
 	identity := agentSandboxCreateIdentity{
-		Namespace: "cautem-ws-123", SandboxID: "sandbox-123", Generation: "gen9",
+		Namespace: "quarshell-ws-123", SandboxID: "sandbox-123", Generation: "gen9",
 		SandboxName: "demo", SandboxUID: "sandbox-uid", APIVersion: "agents.x-k8s.io/v1beta1",
 		ServiceIP: "10.96.0.12", ControlServiceIP: "10.96.0.13",
 		WorkloadName: "demo", SupervisorName: "os-supervisor-sandbox-123",
 	}
-	secrets, err := buildCautemGenerationSecrets(identity, []byte("version: 1\n"), []string{"CAUTEM_SANDBOX_TOKEN=bearer"})
+	secrets, err := buildQuarshellGenerationSecrets(identity, []byte("version: 1\n"), []string{"QUARSHELL_SANDBOX_TOKEN=bearer"})
 	if err != nil {
-		t.Fatalf("build Cautem runtime generation: %v", err)
+		t.Fatalf("build Quarshell runtime generation: %v", err)
 	}
 	now := time.Now()
 	needsRefresh, err := runtimeBridgeCertificatesNeedRefresh(secrets, identity, now, 30*24*time.Hour)

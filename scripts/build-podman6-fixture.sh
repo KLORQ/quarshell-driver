@@ -17,7 +17,7 @@ if ! docker info >/dev/null 2>&1; then
   exit 2
 fi
 
-platform=${CAUTEM_PODMAN_FIXTURE_PLATFORM:-}
+platform=${QUARSHELL_PODMAN_FIXTURE_PLATFORM:-}
 if [ -n "$platform" ]; then
   case "$platform" in linux/amd64|linux/arm64) ;; *) echo "unsupported Podman fixture platform: $platform" >&2; exit 2 ;; esac
   docker build --pull --platform "$platform" -f "$script_dir/../tests/e2e/podman/Containerfile.podman6" -t "$image" "$module_dir"
@@ -36,9 +36,9 @@ if ! printf '%s\n' "$image_id" | python3 -c 'import re,sys; raise SystemExit(0 i
   exit 1
 fi
 printf 'Podman fixture verified: %s (%s), %s\n' "$image" "$version" "$image_id"
-if [ -n "${CAUTEM_PODMAN_FIXTURE_DIGEST_FILE:-}" ]; then
-  mkdir -p "$(dirname -- "$CAUTEM_PODMAN_FIXTURE_DIGEST_FILE")"
-  temporary="$CAUTEM_PODMAN_FIXTURE_DIGEST_FILE.tmp"
+if [ -n "${QUARSHELL_PODMAN_FIXTURE_DIGEST_FILE:-}" ]; then
+  mkdir -p "$(dirname -- "$QUARSHELL_PODMAN_FIXTURE_DIGEST_FILE")"
+  temporary="$QUARSHELL_PODMAN_FIXTURE_DIGEST_FILE.tmp"
   printf '%s\n' "$image_id" >"$temporary"
-  mv -f "$temporary" "$CAUTEM_PODMAN_FIXTURE_DIGEST_FILE"
+  mv -f "$temporary" "$QUARSHELL_PODMAN_FIXTURE_DIGEST_FILE"
 fi

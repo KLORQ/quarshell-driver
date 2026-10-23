@@ -13,15 +13,15 @@ import (
 )
 
 const (
-	labelSandbox   = "cautem.sandbox"
-	labelName      = "cautem.name"
-	labelNetwork   = "cautem.network"
-	labelRole      = "cautem.role"
-	labelInit      = "cautem.init"
-	labelVolume    = "cautem.volume"
-	labelSSH       = "cautem.ssh"
-	labelSSHVol    = "cautem.ssh_volume"
-	labelPolicy    = "cautem.policy_path"
+	labelSandbox   = "quarshell.sandbox"
+	labelName      = "quarshell.name"
+	labelNetwork   = "quarshell.network"
+	labelRole      = "quarshell.role"
+	labelInit      = "quarshell.init"
+	labelVolume    = "quarshell.volume"
+	labelSSH       = "quarshell.ssh"
+	labelSSHVol    = "quarshell.ssh_volume"
+	labelPolicy    = "quarshell.policy_path"
 	roleSandbox    = "sandbox"
 	roleProxy      = "proxy"
 	roleNetwork    = "network"
@@ -127,12 +127,12 @@ func New() (*Driver, error) {
 }
 
 // HostGatewayExtraHosts maps OpenShell-style host-gateway aliases into containers.
-// Canonical callback is host.cautem.internal (cf. host.openshell.internal). On Linux,
+// Canonical callback is host.quarshell.internal (cf. host.openshell.internal). On Linux,
 // host.docker.internal is also mapped so Desktop/Linux compose parity holds —
 // same pair OpenShell documents under extra_hosts.
 
 // HostGatewayExtraHosts maps OpenShell-style host-gateway aliases into containers.
-// Canonical callback is host.cautem.internal (cf. host.openshell.internal). On Linux,
+// Canonical callback is host.quarshell.internal (cf. host.openshell.internal). On Linux,
 // host.docker.internal is also mapped so Desktop/Linux compose parity holds —
 // same pair OpenShell documents under extra_hosts.
 func HostGatewayExtraHosts() []string {

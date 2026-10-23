@@ -6,7 +6,7 @@ import (
 )
 
 func TestBackendConfigDefaultRuntimeClassName(t *testing.T) {
-	t.Setenv("CAUTEM_GATEWAY_ID", "test-gateway")
+	t.Setenv("QUARSHELL_GATEWAY_ID", "test-gateway")
 	digest := strings.Repeat("a", 64)
 	config, err := BackendConfigFromMap(map[string]any{
 		"default_runtime_class_name":        "gvisor",

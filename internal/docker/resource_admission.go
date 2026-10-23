@@ -15,9 +15,9 @@ import (
 )
 
 const (
-	labelDriverConfigUsed        = "cautem.internal/driver-config-used"
-	labelDriverConfigUnlabelable = "cautem.internal/driver-config-unlabelable"
-	labelResourceIdentities      = "cautem.internal/resource-admission-identities"
+	labelDriverConfigUsed        = "quarshell.internal/driver-config-used"
+	labelDriverConfigUnlabelable = "quarshell.internal/driver-config-unlabelable"
+	labelResourceIdentities      = "quarshell.internal/resource-admission-identities"
 )
 
 func (d *Driver) resourceAdmissionPolicy() resourceadmission.Config {

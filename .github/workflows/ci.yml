@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2026 the cautem authors
+# SPDX-FileCopyrightText: Copyright (c) 2026 the quarshell authors
 # SPDX-License-Identifier: Apache-2.0
 #
 name: CI
@@ -35,27 +35,21 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: KLORQ/quarshell-core
-          ref: v0.4.2
+          ref: v0.5.0
           path: quarshell-core
 
       - name: Checkout quarshell-proto workspace dependency
         uses: actions/checkout@v4
         with:
           repository: KLORQ/quarshell-proto
-          ref: v0.2.2
+          ref: v0.2.3
           path: quarshell-proto
       - name: Checkout quarshell-proxy workspace dependency
         uses: actions/checkout@v4
         with:
           repository: KLORQ/quarshell-proxy
-          ref: v0.1.1
+          ref: v0.1.2
           path: quarshell-proxy
-      - name: Checkout quarshell-slogx workspace dependency
-        uses: actions/checkout@v4
-        with:
-          repository: KLORQ/quarshell-slogx
-          ref: v0.1.5
-          path: quarshell-slogx
       - name: Write go.work
         working-directory: ${{ github.workspace }}
         shell: bash
@@ -88,11 +82,10 @@ jobs:
 
       - uses: actions/setup-go@v5
         with:
-          go-version: "1.27.2"
+          go-version: "1.27.3"
           cache: true
           cache-dependency-path: |
             quarshell-*/go.sum
-            quarshell-slogx/go.sum
       - name: Check gofmt
         run: |
           set -euo pipefail
@@ -121,27 +114,21 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: KLORQ/quarshell-core
-          ref: v0.4.2
+          ref: v0.5.0
           path: quarshell-core
 
       - name: Checkout quarshell-proto workspace dependency
         uses: actions/checkout@v4
         with:
           repository: KLORQ/quarshell-proto
-          ref: v0.2.2
+          ref: v0.2.3
           path: quarshell-proto
       - name: Checkout quarshell-proxy workspace dependency
         uses: actions/checkout@v4
         with:
           repository: KLORQ/quarshell-proxy
-          ref: v0.1.1
+          ref: v0.1.2
           path: quarshell-proxy
-      - name: Checkout quarshell-slogx workspace dependency
-        uses: actions/checkout@v4
-        with:
-          repository: KLORQ/quarshell-slogx
-          ref: v0.1.5
-          path: quarshell-slogx
       - name: Write go.work
         working-directory: ${{ github.workspace }}
         shell: bash
@@ -174,11 +161,10 @@ jobs:
 
       - uses: actions/setup-go@v5
         with:
-          go-version: "1.27.2"
+          go-version: "1.27.3"
           cache: true
           cache-dependency-path: |
             quarshell-*/go.sum
-            quarshell-slogx/go.sum
       - name: golangci-lint
         uses: golangci/golangci-lint-action@v8
         with:
@@ -207,27 +193,21 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: KLORQ/quarshell-core
-          ref: v0.4.2
+          ref: v0.5.0
           path: quarshell-core
 
       - name: Checkout quarshell-proto workspace dependency
         uses: actions/checkout@v4
         with:
           repository: KLORQ/quarshell-proto
-          ref: v0.2.2
+          ref: v0.2.3
           path: quarshell-proto
       - name: Checkout quarshell-proxy workspace dependency
         uses: actions/checkout@v4
         with:
           repository: KLORQ/quarshell-proxy
-          ref: v0.1.1
+          ref: v0.1.2
           path: quarshell-proxy
-      - name: Checkout quarshell-slogx workspace dependency
-        uses: actions/checkout@v4
-        with:
-          repository: KLORQ/quarshell-slogx
-          ref: v0.1.5
-          path: quarshell-slogx
       - name: Write go.work
         working-directory: ${{ github.workspace }}
         shell: bash
@@ -260,11 +240,10 @@ jobs:
 
       - uses: actions/setup-go@v5
         with:
-          go-version: "1.27.2"
+          go-version: "1.27.3"
           cache: true
           cache-dependency-path: |
             quarshell-*/go.sum
-            quarshell-slogx/go.sum
       - name: Download modules
         run: go mod download
       - name: Build
@@ -291,27 +270,21 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: KLORQ/quarshell-core
-          ref: v0.4.2
+          ref: v0.5.0
           path: quarshell-core
 
       - name: Checkout quarshell-proto workspace dependency
         uses: actions/checkout@v4
         with:
           repository: KLORQ/quarshell-proto
-          ref: v0.2.2
+          ref: v0.2.3
           path: quarshell-proto
       - name: Checkout quarshell-proxy workspace dependency
         uses: actions/checkout@v4
         with:
           repository: KLORQ/quarshell-proxy
-          ref: v0.1.1
+          ref: v0.1.2
           path: quarshell-proxy
-      - name: Checkout quarshell-slogx workspace dependency
-        uses: actions/checkout@v4
-        with:
-          repository: KLORQ/quarshell-slogx
-          ref: v0.1.5
-          path: quarshell-slogx
       - name: Write go.work
         working-directory: ${{ github.workspace }}
         shell: bash
@@ -344,11 +317,10 @@ jobs:
 
       - uses: actions/setup-go@v5
         with:
-          go-version: "1.27.2"
+          go-version: "1.27.3"
           cache: true
           cache-dependency-path: |
             quarshell-*/go.sum
-            quarshell-slogx/go.sum
       - name: Download modules
         run: go mod download
       - name: Vet
@@ -396,34 +368,28 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: KLORQ/quarshell-core
-          ref: v0.4.2
+          ref: v0.5.0
           path: quarshell-core
 
       - name: Checkout quarshell-runtime helpers
         uses: actions/checkout@v4
         with:
           repository: KLORQ/quarshell-runtime
-          ref: v0.1.1
+          ref: v0.1.2
           path: quarshell-runtime
 
       - name: Checkout quarshell-proto workspace dependency
         uses: actions/checkout@v4
         with:
           repository: KLORQ/quarshell-proto
-          ref: v0.2.2
+          ref: v0.2.3
           path: quarshell-proto
       - name: Checkout quarshell-proxy workspace dependency
         uses: actions/checkout@v4
         with:
           repository: KLORQ/quarshell-proxy
-          ref: v0.1.1
+          ref: v0.1.2
           path: quarshell-proxy
-      - name: Checkout quarshell-slogx workspace dependency
-        uses: actions/checkout@v4
-        with:
-          repository: KLORQ/quarshell-slogx
-          ref: v0.1.5
-          path: quarshell-slogx
       - name: Write go.work
         working-directory: ${{ github.workspace }}
         shell: bash
@@ -455,7 +421,7 @@ jobs:
 
       - uses: actions/setup-go@v5
         with:
-          go-version: "1.27.2"
+          go-version: "1.27.3"
           cache: true
           cache-dependency-path: |
             quarshell-driver/go.sum
@@ -473,8 +439,8 @@ jobs:
 
       - name: Build VM worker, guest agent and runtime helpers
         env:
-          CAUTEM_VM_BUILD_DIR: ${{ runner.temp }}/cautem-vm-runtime
-          CAUTEM_VM_GUEST_ARCH: amd64
+          QUARSHELL_VM_BUILD_DIR: ${{ runner.temp }}/quarshell-vm-runtime
+          QUARSHELL_VM_GUEST_ARCH: amd64
         run: ./scripts/build-vm-runtime.sh
 
       - name: Verify runtime artifacts
@@ -482,15 +448,15 @@ jobs:
         run: |
           set -euo pipefail
           python3 ./scripts/verify-vm-runtime-manifest.py \
-            "${{ runner.temp }}/cautem-vm-runtime/vm-runtime-manifest.json" \
+            "${{ runner.temp }}/quarshell-vm-runtime/vm-runtime-manifest.json" \
             linux/amd64 amd64
-          test -s "${{ runner.temp }}/cautem-vm-runtime/cautem-vm-worker"
+          test -s "${{ runner.temp }}/quarshell-vm-runtime/quarshell-vm-worker"
           for artifact in \
-            cautem-vm-guest-agent-linux-amd64 \
-            cautem-init-linux-amd64 \
-            cautem-supervisor-linux-amd64 \
-            cautem-sshd-linux-amd64; do
-            binary="${{ runner.temp }}/cautem-vm-runtime/$artifact"
+            quarshell-vm-guest-agent-linux-amd64 \
+            quarshell-init-linux-amd64 \
+            quarshell-supervisor-linux-amd64 \
+            quarshell-sshd-linux-amd64; do
+            binary="${{ runner.temp }}/quarshell-vm-runtime/$artifact"
             test -s "$binary"
             readelf -h "$binary" | grep -q 'Advanced Micro Devices X86-64'
             if readelf -l "$binary" | grep -q INTERP; then

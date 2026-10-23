@@ -125,14 +125,14 @@ func supervisorIdentityFromPod(pod *unstructured.Unstructured, requestedPod map[
 	labels, _, _ := unstructured.NestedStringMap(pod.Object, "metadata", "labels")
 	spec, _, _ := unstructured.NestedMap(pod.Object, "spec")
 	requestedSpec, _ := requestedPod["spec"].(map[string]any)
-	cautem := namedContainer(spec, "containers", cautemProxyImageName)
+	quarshell := namedContainer(spec, "containers", quarshellProxyImageName)
 	containerName := "supervisor"
-	if cautem != nil {
-		containerName = cautemProxyImageName
+	if quarshell != nil {
+		containerName = quarshellProxyImageName
 	}
 	container := namedContainer(spec, "containers", containerName)
 	bootstrapVolume := "bootstrap"
-	if containerName == cautemProxyImageName {
+	if containerName == quarshellProxyImageName {
 		bootstrapVolume = "runtime"
 	}
 	bootstrapSecret := podSecretReference(spec, bootstrapVolume)
@@ -159,9 +159,9 @@ func supervisorIdentityFromPod(pod *unstructured.Unstructured, requestedPod map[
 		DropAllCapabilities:             containerDropsAllCapabilities(containerSecurity),
 		PrivilegeEscalationDisabled:     containerSecurity["allowPrivilegeEscalation"] == false,
 		AdditionalContainers:            len(sliceValue(spec["containers"])) != 1 || len(sliceValue(spec["initContainers"])) != 0,
-		CautemContainerMatches:          containerSpecMatches(container, requestedContainer),
-		CautemVolumeSourcesMatch:        podVolumeSourcesMatch(actualVolumes, requestedVolumes),
-		CautemHasRawTokenEnv:            containerHasRawCautemTokenEnv(container),
+		QuarshellContainerMatches:       containerSpecMatches(container, requestedContainer),
+		QuarshellVolumeSourcesMatch:     podVolumeSourcesMatch(actualVolumes, requestedVolumes),
+		QuarshellHasRawTokenEnv:         containerHasRawQuarshellTokenEnv(container),
 	}
 }
 
@@ -176,11 +176,11 @@ func containerEnvFromSecretReference(container map[string]any) string {
 	return name
 }
 
-func containerHasRawCautemTokenEnv(container map[string]any) bool {
+func containerHasRawQuarshellTokenEnv(container map[string]any) bool {
 	env, _ := container["env"].([]any)
 	for _, value := range env {
 		item, _ := value.(map[string]any)
-		if item["name"] == "CAUTEM_SANDBOX_TOKEN" {
+		if item["name"] == "QUARSHELL_SANDBOX_TOKEN" {
 			return true
 		}
 	}

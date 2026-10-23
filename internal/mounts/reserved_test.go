@@ -9,18 +9,18 @@ func TestValidateContainerMountTarget(t *testing.T) {
 	}{
 		{"/workspace/src", true},
 		{"/data", true},
-		{"/cautem", false},
-		{"/cautem/data", false},
-		{"/cautem/policy.yaml", false},
+		{"/quarshell", false},
+		{"/quarshell/data", false},
+		{"/quarshell/policy.yaml", false},
 		{"/proc", false},
 		{"/sys/fs", false},
 		{"/dev/null", false},
-		{"/run/cautem/ssh.sock", false},
+		{"/run/quarshell/ssh.sock", false},
 		{"/run", false},
-		{"/etc/cautem", false},
-		{"/var/run/cautem", false},
+		{"/etc/quarshell", false},
+		{"/var/run/quarshell", false},
 		{"relative", false},
-		{"/workspace/../cautem", false}, // has ..
+		{"/workspace/../quarshell", false}, // has ..
 	}
 	for _, tc := range cases {
 		err := ValidateContainerMountTarget(tc.target)
@@ -40,16 +40,16 @@ func TestValidateUploadDest(t *testing.T) {
 	if err := ValidateUploadDest("/workspace"); err != nil {
 		t.Fatal(err)
 	}
-	if err := ValidateUploadDest("/cautem/data/x"); err == nil {
-		t.Fatal("expected refuse /cautem")
+	if err := ValidateUploadDest("/quarshell/data/x"); err == nil {
+		t.Fatal("expected refuse /quarshell")
 	}
 }
 
 func TestPathsOverlap(t *testing.T) {
-	if !PathsOverlap("/cautem", "/cautem/data") {
+	if !PathsOverlap("/quarshell", "/quarshell/data") {
 		t.Fatal("expected overlap")
 	}
-	if PathsOverlap("/workspace", "/cautem") {
+	if PathsOverlap("/workspace", "/quarshell") {
 		t.Fatal("no overlap")
 	}
 }

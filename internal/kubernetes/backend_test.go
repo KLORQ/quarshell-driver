@@ -38,7 +38,7 @@ func TestRegisteredKubernetesBackendConsumesDomainRequest(t *testing.T) {
 		Workload:  driver.WorkloadSpec{Image: "registry.example/agent:latest", Command: []string{"python", "-V"}, Environment: []string{"A=B"}, RestartPolicy: "never"},
 		Network: driver.NetworkSpec{
 			GatewayID: "gateway-a", GatewayURL: "http://gateway.example:7443",
-			Proxy: &driver.ProxySpec{PolicyPath: policyPath, Environment: []string{"CAUTEM_GATEWAY_URL=http://gateway.example:7443", "CAUTEM_SANDBOX=agent"}},
+			Proxy: &driver.ProxySpec{PolicyPath: policyPath, Environment: []string{"QUARSHELL_GATEWAY_URL=http://gateway.example:7443", "QUARSHELL_SANDBOX=agent"}},
 		},
 		Runtime: driver.RuntimeAssets{TelemetryEndpoint: "http://collector:4317"},
 	}

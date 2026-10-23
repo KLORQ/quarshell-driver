@@ -12,9 +12,9 @@
 
 - Capture VM non-interactive exec stdout/stderr in `driver.ExecResult` and pass stdin to the guest agent; cancellation still kills the guest process group.
 - Add a fail-closed VM policy/network broker: a per-VM host proxy listens on a private Unix socket, libkrun exposes a guest-initiated vsock mapping with TSI disabled, and the guest agent forces workload HTTP(S) traffic through its loopback endpoint. Broker startup is health-checked and an unexpected proxy exit stops the worker.
-- Extend live MicroVM acceptance to boot the real supervisor/init/SSH helpers, exercise the Cautem policy engine's default-deny response through the guest vsock broker, observe the supervisor control handshake, execute a command through the SSH vsock relay, and verify restart and recovery paths.
-- Start the guest workload through `cautem-supervisor` and hardening init; bridge supervisor lifecycle RPCs over vsock to the host proxy, force Exec through init, and wait for the proxy relay control socket before boot.
-- Add relay-only guest SSH: the host proxy connects through a private UDS/vsock mapping to a guest-agent bridge and `cautem-sshd`; no guest TCP listener is opened.
+- Extend live MicroVM acceptance to boot the real supervisor/init/SSH helpers, exercise the Quarshell policy engine's default-deny response through the guest vsock broker, observe the supervisor control handshake, execute a command through the SSH vsock relay, and verify restart and recovery paths.
+- Start the guest workload through `quarshell-supervisor` and hardening init; bridge supervisor lifecycle RPCs over vsock to the host proxy, force Exec through init, and wait for the proxy relay control socket before boot.
+- Add relay-only guest SSH: the host proxy connects through a private UDS/vsock mapping to a guest-agent bridge and `quarshell-sshd`; no guest TCP listener is opened.
 - Validate VM Gateway gRPC endpoint and mTLS client files, pass them only to the host proxy, and keep loopback Gateway URLs reachable from a host-owned VM worker.
 - Reject remaining unsupported VM `driver.Spec` capabilities explicitly, including host workspace mounts, PTY/TTY, GPU, display, persistent volumes, and host integration fields.
 - Add an opt-in native MicroVM live acceptance test for boot, exec, file copy, inspect/list/logs, worker recovery, stop/start, and delete.
@@ -43,27 +43,27 @@
 
 ### Added
 
-- Add an experimental Agent Sandbox Kubernetes backend with sandbox lifecycle, listing, inspection, PVC workspaces, and paired Cautem workload/proxy runtimes.
+- Add an experimental Agent Sandbox Kubernetes backend with sandbox lifecycle, listing, inspection, PVC workspaces, and paired Quarshell workload/proxy runtimes.
 - Rotate immutable Kubernetes runtime credential generations and deliver policy updates by restarting the affected runtime.
 - Renew Kubernetes bridge certificates within 30 days of expiry during the Gateway's daily maintenance pass.
 
 ### Changed
 
 - Split the Docker driver implementation into focused lifecycle, networking, copy, and runtime files.
-- Keep Kubernetes exec, logs, and file transfer on the authenticated Cautem relay; direct Kubernetes data-plane methods remain unsupported.
+- Keep Kubernetes exec, logs, and file transfer on the authenticated Quarshell relay; direct Kubernetes data-plane methods remain unsupported.
 - Refresh Docker, Moby, Kubernetes client, and terminal dependencies to their latest compatible releases.
 
 ## [v0.1.7] - 2026-10-11
 
 ### Fixed
 
-- Use the published cautem sandbox base when no local sandbox image is available, so the default hardened sandbox has the required `sandbox` user and `cautem-init` entrypoint.
+- Use the published quarshell sandbox base when no local sandbox image is available, so the default hardened sandbox has the required `sandbox` user and `quarshell-init` entrypoint.
 
 ## [v0.1.6] - 2026-10-11
 
 ### Changed
 
-- Rename the module, runtime identifiers and project references to the `cautem` namespace.
+- Rename the module, runtime identifiers and project references to the `quarshell` namespace.
 
 ## [v0.1.0-beta.2] - 2026-10-10
 

@@ -12,13 +12,13 @@ if grep -Eq '^  pull_request(_target)?:' "$workflow_file"; then
   exit 1
 fi
 grep -F -- 'if: always()' "$workflow_file" >/dev/null
-grep -F -- 'rm -rf "${{ runner.temp }}/cautem-vm-runtime"' "$workflow_file" >/dev/null
+grep -F -- 'rm -rf "${{ runner.temp }}/quarshell-vm-runtime"' "$workflow_file" >/dev/null
 if grep -F -- "if: matrix.arch == 'amd64'" "$workflow_file" >/dev/null; then
   echo "engine-in-MicroVM acceptance must run on every declared KVM architecture" >&2
   exit 1
 fi
 grep -F -- 'name: engines-in-microvm-${{ matrix.arch }}-${{ github.run_id }}' "$workflow_file" >/dev/null
-temporary_dir=$(mktemp -d "${TMPDIR:-/tmp}/cautem-kvm-script-test.XXXXXX")
+temporary_dir=$(mktemp -d "${TMPDIR:-/tmp}/quarshell-kvm-script-test.XXXXXX")
 cleanup() { rm -rf "$temporary_dir"; }
 assert_single_force_cleanup() {
   count=$(grep -Fc -- 'rm -f fixture-container-id' "$1" || true)
@@ -34,7 +34,7 @@ trap 'cleanup; exit 130' INT
 trap 'cleanup; exit 143' TERM
 
 mkdir -p "$temporary_dir/bin" "$temporary_dir/runtime" "$temporary_dir/build"
-for binary in cautem-vm-worker cautem-vm-umoci-linux-amd64 cautem-vm-guest-agent-linux-amd64 cautem-init-linux-amd64 cautem-supervisor-linux-amd64 cautem-sshd-linux-amd64 cautem-vm-security-probe-linux-amd64; do
+for binary in quarshell-vm-worker quarshell-vm-umoci-linux-amd64 quarshell-vm-guest-agent-linux-amd64 quarshell-init-linux-amd64 quarshell-supervisor-linux-amd64 quarshell-sshd-linux-amd64 quarshell-vm-security-probe-linux-amd64; do
   printf '#!/bin/sh\nexit 0\n' >"$temporary_dir/build/$binary"
   chmod 0755 "$temporary_dir/build/$binary"
 done
@@ -47,7 +47,7 @@ import sys
 
 root = pathlib.Path(sys.argv[1])
 runtime = pathlib.Path(sys.argv[2])
-artifacts = sorted(path for path in root.iterdir() if path.name.startswith("cautem-"))
+artifacts = sorted(path for path in root.iterdir() if path.name.startswith("quarshell-"))
 manifest = {
     "schema_version": 1,
     "vm_control_protocol": 2,
@@ -80,7 +80,7 @@ for name in ("libkrun.so", "libkrunfw.so.5"):
     },
 }), encoding="utf-8")
 PY
-export CAUTEM_VM_RUNTIME_TRUST_LOCK="$temporary_dir/approved-runtime.json"
+export QUARSHELL_VM_RUNTIME_TRUST_LOCK="$temporary_dir/approved-runtime.json"
 printf '#!/bin/sh\nexit 0\n' >"$temporary_dir/formatter"
 chmod 0755 "$temporary_dir/formatter"
 
@@ -89,13 +89,13 @@ cat >"$temporary_dir/bin/go" <<'EOF'
 if [ "${1:-}" = env ]; then
   case "${2:-}" in
     GOOS) echo linux ;;
-    GOARCH) echo "${CAUTEM_TEST_GOARCH:-amd64}" ;;
+    GOARCH) echo "${QUARSHELL_TEST_GOARCH:-amd64}" ;;
     *) exit 2 ;;
   esac
   exit 0
 fi
-if [ "${1:-}" = test ] && [ "${CAUTEM_VM_TEST_ROOTFS_TAR##*/}" = alpine-rootfs.tar ]; then
-  if [ "${CAUTEM_TEST_INVALID_ROOTFS:-0}" = 1 ] && [ "$(cat "$CAUTEM_VM_TEST_ROOTFS_TAR")" != 'fixture rootfs archive' ]; then
+if [ "${1:-}" = test ] && [ "${QUARSHELL_VM_TEST_ROOTFS_TAR##*/}" = alpine-rootfs.tar ]; then
+  if [ "${QUARSHELL_TEST_INVALID_ROOTFS:-0}" = 1 ] && [ "$(cat "$QUARSHELL_VM_TEST_ROOTFS_TAR")" != 'fixture rootfs archive' ]; then
     printf '%s\n' \
       '{"Action":"run","Package":"github.com/KLORQ/quarshell-driver-vm/vm","Test":"TestLiveMicroVMLifecycle"}' \
       '{"Action":"fail","Package":"github.com/KLORQ/quarshell-driver-vm/vm","Test":"TestLiveMicroVMLifecycle"}' \
@@ -115,18 +115,18 @@ EOF
 cat >"$temporary_dir/bin/id" <<'EOF'
 #!/bin/sh
 if [ "${1:-}" = -u ]; then
-  echo "${CAUTEM_TEST_UID:-1000}"
+  echo "${QUARSHELL_TEST_UID:-1000}"
   exit 0
 fi
 exit 2
 EOF
 cat >"$temporary_dir/bin/docker" <<'EOF'
 #!/bin/sh
-printf '%s\n' "$*" >>"$CAUTEM_TEST_DOCKER_LOG"
+printf '%s\n' "$*" >>"$QUARSHELL_TEST_DOCKER_LOG"
 case "${1:-}" in
   run) echo fixture-container-id ;;
   exec)
-    if [ "${CAUTEM_TEST_DOCKER_TERM:-0}" = 1 ]; then
+    if [ "${QUARSHELL_TEST_DOCKER_TERM:-0}" = 1 ]; then
       kill -TERM "$PPID"
       sleep 1
       exit 143
@@ -134,7 +134,7 @@ case "${1:-}" in
     exit 0
     ;;
   export)
-    if [ "${CAUTEM_TEST_DOCKER_EXPORT_FAIL:-0}" = 1 ]; then exit 5; fi
+    if [ "${QUARSHELL_TEST_DOCKER_EXPORT_FAIL:-0}" = 1 ]; then exit 5; fi
     output=
     previous=
     for argument in "$@"; do
@@ -157,8 +157,8 @@ chmod 0755 "$temporary_dir/bin/go" "$temporary_dir/bin/docker"
 chmod 0755 "$temporary_dir/bin/id"
 
 if PATH="$temporary_dir/bin:$PATH" \
-  CAUTEM_TEST_UID=0 \
-  CAUTEM_KVM_DEVICE=/dev/null \
+  QUARSHELL_TEST_UID=0 \
+  QUARSHELL_KVM_DEVICE=/dev/null \
   "$script_dir/run-live-kvm-acceptance.sh" >"$temporary_dir/root.log" 2>&1; then
   echo "KVM acceptance accepted a root runner" >&2
   exit 1
@@ -170,12 +170,12 @@ grep -F -- 'must run as a non-root user' "$temporary_dir/root.log" >/dev/null ||
 }
 
 PATH="$temporary_dir/bin:$PATH" \
-CAUTEM_TEST_UID=1000 \
-CAUTEM_KVM_DEVICE=/dev/null \
-CAUTEM_VM_BUILD_DIR="$temporary_dir/build" \
+QUARSHELL_TEST_UID=1000 \
+QUARSHELL_KVM_DEVICE=/dev/null \
+QUARSHELL_VM_BUILD_DIR="$temporary_dir/build" \
 OPENSHELL_VM_RUNTIME_DIR="$temporary_dir/runtime" \
-CAUTEM_VM_TEST_E2FS_FORMATTER="$temporary_dir/formatter" \
-CAUTEM_TEST_DOCKER_LOG="$temporary_dir/docker.log" \
+QUARSHELL_VM_TEST_E2FS_FORMATTER="$temporary_dir/formatter" \
+QUARSHELL_TEST_DOCKER_LOG="$temporary_dir/docker.log" \
 "$script_dir/run-live-kvm-acceptance.sh" >"$temporary_dir/run.log" 2>&1 || {
   cat "$temporary_dir/run.log" >&2
   cat "$temporary_dir/docker.log" >&2
@@ -190,8 +190,8 @@ grep -F -- '--- PASS: TestLiveMicroVMLifecycle' "$temporary_dir/run.log" >/dev/n
 grep -F -- 'required Go test gate: PASS (TestLiveMicroVMLifecycle)' "$temporary_dir/run.log" >/dev/null
 
 # A runtime digest mismatch must fail before rootfs preparation or VM launch.
-cp "$CAUTEM_VM_RUNTIME_TRUST_LOCK" "$temporary_dir/approved-runtime.good.json"
-python3 - "$CAUTEM_VM_RUNTIME_TRUST_LOCK" <<'PY'
+cp "$QUARSHELL_VM_RUNTIME_TRUST_LOCK" "$temporary_dir/approved-runtime.good.json"
+python3 - "$QUARSHELL_VM_RUNTIME_TRUST_LOCK" <<'PY'
 import json
 import pathlib
 import sys
@@ -203,12 +203,12 @@ path.write_text(json.dumps(lock), encoding="utf-8")
 PY
 : >"$temporary_dir/digest-mismatch-docker.log"
 if PATH="$temporary_dir/bin:$PATH" \
-  CAUTEM_TEST_UID=1000 \
-  CAUTEM_KVM_DEVICE=/dev/null \
-  CAUTEM_VM_BUILD_DIR="$temporary_dir/build" \
+  QUARSHELL_TEST_UID=1000 \
+  QUARSHELL_KVM_DEVICE=/dev/null \
+  QUARSHELL_VM_BUILD_DIR="$temporary_dir/build" \
   OPENSHELL_VM_RUNTIME_DIR="$temporary_dir/runtime" \
-  CAUTEM_VM_TEST_ROOTFS_TAR="$temporary_dir/alpine-rootfs.tar" \
-  CAUTEM_TEST_DOCKER_LOG="$temporary_dir/digest-mismatch-docker.log" \
+  QUARSHELL_VM_TEST_ROOTFS_TAR="$temporary_dir/alpine-rootfs.tar" \
+  QUARSHELL_TEST_DOCKER_LOG="$temporary_dir/digest-mismatch-docker.log" \
   "$script_dir/run-live-kvm-acceptance.sh" >"$temporary_dir/digest-mismatch.log" 2>&1; then
   echo "KVM acceptance accepted runtime libraries outside the approved digest lock" >&2
   exit 1
@@ -218,19 +218,19 @@ if [ -s "$temporary_dir/digest-mismatch-docker.log" ]; then
   echo "KVM acceptance invoked Docker before rejecting runtime digest mismatch" >&2
   exit 1
 fi
-mv "$temporary_dir/approved-runtime.good.json" "$CAUTEM_VM_RUNTIME_TRUST_LOCK"
+mv "$temporary_dir/approved-runtime.good.json" "$QUARSHELL_VM_RUNTIME_TRUST_LOCK"
 
 # A supplied rootfs bypasses Docker fixture creation and still reaches the test.
 printf 'fixture rootfs archive\n' >"$temporary_dir/alpine-rootfs.tar"
 : >"$temporary_dir/supplied-docker.log"
 PATH="$temporary_dir/bin:$PATH" \
-CAUTEM_TEST_UID=1000 \
-CAUTEM_KVM_DEVICE=/dev/null \
-CAUTEM_VM_BUILD_DIR="$temporary_dir/build" \
+QUARSHELL_TEST_UID=1000 \
+QUARSHELL_KVM_DEVICE=/dev/null \
+QUARSHELL_VM_BUILD_DIR="$temporary_dir/build" \
 OPENSHELL_VM_RUNTIME_DIR="$temporary_dir/runtime" \
-CAUTEM_VM_TEST_E2FS_FORMATTER="$temporary_dir/formatter" \
-CAUTEM_VM_TEST_ROOTFS_TAR="$temporary_dir/alpine-rootfs.tar" \
-CAUTEM_TEST_DOCKER_LOG="$temporary_dir/supplied-docker.log" \
+QUARSHELL_VM_TEST_E2FS_FORMATTER="$temporary_dir/formatter" \
+QUARSHELL_VM_TEST_ROOTFS_TAR="$temporary_dir/alpine-rootfs.tar" \
+QUARSHELL_TEST_DOCKER_LOG="$temporary_dir/supplied-docker.log" \
 "$script_dir/run-live-kvm-acceptance.sh" >"$temporary_dir/supplied.log" 2>&1 || {
   cat "$temporary_dir/supplied.log" >&2
   echo "prebuilt rootfs acceptance path failed" >&2
@@ -245,13 +245,13 @@ fi
 # Export failure must trigger force cleanup and must not reach Go acceptance.
 : >"$temporary_dir/export-fail-docker.log"
 if PATH="$temporary_dir/bin:$PATH" \
-  CAUTEM_TEST_UID=1000 \
-  CAUTEM_TEST_DOCKER_EXPORT_FAIL=1 \
-  CAUTEM_KVM_DEVICE=/dev/null \
-  CAUTEM_VM_BUILD_DIR="$temporary_dir/build" \
+  QUARSHELL_TEST_UID=1000 \
+  QUARSHELL_TEST_DOCKER_EXPORT_FAIL=1 \
+  QUARSHELL_KVM_DEVICE=/dev/null \
+  QUARSHELL_VM_BUILD_DIR="$temporary_dir/build" \
   OPENSHELL_VM_RUNTIME_DIR="$temporary_dir/runtime" \
-  CAUTEM_VM_TEST_E2FS_FORMATTER="$temporary_dir/formatter" \
-  CAUTEM_TEST_DOCKER_LOG="$temporary_dir/export-fail-docker.log" \
+  QUARSHELL_VM_TEST_E2FS_FORMATTER="$temporary_dir/formatter" \
+  QUARSHELL_TEST_DOCKER_LOG="$temporary_dir/export-fail-docker.log" \
   "$script_dir/run-live-kvm-acceptance.sh" >"$temporary_dir/export-fail.log" 2>&1; then
   echo "KVM acceptance ignored rootfs export failure" >&2
   exit 1
@@ -265,14 +265,14 @@ fi
 # A malformed prebuilt archive is passed through to the required live test and fails the gate.
 printf 'not a tar archive\n' >"$temporary_dir/alpine-rootfs.tar"
 if PATH="$temporary_dir/bin:$PATH" \
-  CAUTEM_TEST_UID=1000 \
-  CAUTEM_TEST_INVALID_ROOTFS=1 \
-  CAUTEM_KVM_DEVICE=/dev/null \
-  CAUTEM_VM_BUILD_DIR="$temporary_dir/build" \
+  QUARSHELL_TEST_UID=1000 \
+  QUARSHELL_TEST_INVALID_ROOTFS=1 \
+  QUARSHELL_KVM_DEVICE=/dev/null \
+  QUARSHELL_VM_BUILD_DIR="$temporary_dir/build" \
   OPENSHELL_VM_RUNTIME_DIR="$temporary_dir/runtime" \
-  CAUTEM_VM_TEST_E2FS_FORMATTER="$temporary_dir/formatter" \
-  CAUTEM_VM_TEST_ROOTFS_TAR="$temporary_dir/alpine-rootfs.tar" \
-  CAUTEM_TEST_DOCKER_LOG="$temporary_dir/invalid-rootfs-docker.log" \
+  QUARSHELL_VM_TEST_E2FS_FORMATTER="$temporary_dir/formatter" \
+  QUARSHELL_VM_TEST_ROOTFS_TAR="$temporary_dir/alpine-rootfs.tar" \
+  QUARSHELL_TEST_DOCKER_LOG="$temporary_dir/invalid-rootfs-docker.log" \
   "$script_dir/run-live-kvm-acceptance.sh" >"$temporary_dir/invalid-rootfs.log" 2>&1; then
   echo "KVM acceptance accepted the mocked malformed rootfs" >&2
   exit 1
@@ -281,12 +281,12 @@ grep -F -- 'required Go test gate: FAIL' "$temporary_dir/invalid-rootfs.log" >/d
 
 # Runtime absence and unsupported architecture fail before Docker is invoked.
 if PATH="$temporary_dir/bin:$PATH" \
-  CAUTEM_TEST_UID=1000 \
-  CAUTEM_KVM_DEVICE=/dev/null \
-  CAUTEM_VM_BUILD_DIR="$temporary_dir/build" \
+  QUARSHELL_TEST_UID=1000 \
+  QUARSHELL_KVM_DEVICE=/dev/null \
+  QUARSHELL_VM_BUILD_DIR="$temporary_dir/build" \
   OPENSHELL_VM_RUNTIME_DIR="$temporary_dir/missing-runtime" \
-  CAUTEM_VM_TEST_ROOTFS_TAR="$temporary_dir/alpine-rootfs.tar" \
-  CAUTEM_TEST_DOCKER_LOG="$temporary_dir/runtime-missing-docker.log" \
+  QUARSHELL_VM_TEST_ROOTFS_TAR="$temporary_dir/alpine-rootfs.tar" \
+  QUARSHELL_TEST_DOCKER_LOG="$temporary_dir/runtime-missing-docker.log" \
   "$script_dir/run-live-kvm-acceptance.sh" >"$temporary_dir/runtime-missing.log" 2>&1; then
   echo "KVM acceptance accepted an unavailable runtime" >&2
   exit 1
@@ -297,13 +297,13 @@ if [ -s "$temporary_dir/runtime-missing-docker.log" ]; then
   exit 1
 fi
 if PATH="$temporary_dir/bin:$PATH" \
-  CAUTEM_TEST_UID=1000 \
-  CAUTEM_TEST_GOARCH=ppc64le \
-  CAUTEM_KVM_DEVICE=/dev/null \
-  CAUTEM_VM_BUILD_DIR="$temporary_dir/build" \
+  QUARSHELL_TEST_UID=1000 \
+  QUARSHELL_TEST_GOARCH=ppc64le \
+  QUARSHELL_KVM_DEVICE=/dev/null \
+  QUARSHELL_VM_BUILD_DIR="$temporary_dir/build" \
   OPENSHELL_VM_RUNTIME_DIR="$temporary_dir/runtime" \
-  CAUTEM_VM_TEST_ROOTFS_TAR="$temporary_dir/alpine-rootfs.tar" \
-  CAUTEM_TEST_DOCKER_LOG="$temporary_dir/arch-mismatch-docker.log" \
+  QUARSHELL_VM_TEST_ROOTFS_TAR="$temporary_dir/alpine-rootfs.tar" \
+  QUARSHELL_TEST_DOCKER_LOG="$temporary_dir/arch-mismatch-docker.log" \
   "$script_dir/run-live-kvm-acceptance.sh" >"$temporary_dir/arch-mismatch.log" 2>&1; then
   echo "KVM acceptance accepted an unsupported architecture" >&2
   exit 1
@@ -317,13 +317,13 @@ fi
 # Deliver TERM during Docker setup and verify the running fixture is force-removed.
 : >"$temporary_dir/term-docker.log"
 if PATH="$temporary_dir/bin:$PATH" \
-  CAUTEM_TEST_UID=1000 \
-  CAUTEM_TEST_DOCKER_TERM=1 \
-  CAUTEM_KVM_DEVICE=/dev/null \
-  CAUTEM_VM_BUILD_DIR="$temporary_dir/build" \
+  QUARSHELL_TEST_UID=1000 \
+  QUARSHELL_TEST_DOCKER_TERM=1 \
+  QUARSHELL_KVM_DEVICE=/dev/null \
+  QUARSHELL_VM_BUILD_DIR="$temporary_dir/build" \
   OPENSHELL_VM_RUNTIME_DIR="$temporary_dir/runtime" \
-  CAUTEM_VM_TEST_E2FS_FORMATTER="$temporary_dir/formatter" \
-  CAUTEM_TEST_DOCKER_LOG="$temporary_dir/term-docker.log" \
+  QUARSHELL_VM_TEST_E2FS_FORMATTER="$temporary_dir/formatter" \
+  QUARSHELL_TEST_DOCKER_LOG="$temporary_dir/term-docker.log" \
   "$script_dir/run-live-kvm-acceptance.sh" >"$temporary_dir/term.log" 2>&1; then
   echo "KVM acceptance ignored SIGTERM during Docker setup" >&2
   exit 1

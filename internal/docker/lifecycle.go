@@ -52,12 +52,12 @@ func (d *Driver) Start(ctx context.Context, id core.ID) error {
 	if err != nil {
 		return err
 	}
-	proxyExpected := labels["cautem.ca_volume"] != ""
+	proxyExpected := labels["quarshell.ca_volume"] != ""
 	if proxyExpected && !hasProxy {
 		return fmt.Errorf("docker start: configured policy proxy sidecar is missing")
 	}
 	if hasProxy {
-		if labels["cautem.ca_volume"] != "" {
+		if labels["quarshell.ca_volume"] != "" {
 			if err := d.waitProxyCA(ctx, proxyID, readinessTimeout); err != nil {
 				_ = d.stopContainerIfRunning(context.WithoutCancel(ctx), proxyID)
 				return fmt.Errorf("docker start proxy CA: %w", err)
@@ -96,10 +96,10 @@ func (d *Driver) Start(ctx context.Context, id core.ID) error {
 }
 
 // ensureGuestLayout creates durable home/bin under GuestData for agent installs.
-// Uses a raw docker exec (no cautem-init wrap) so layout works before harden paths matter.
+// Uses a raw docker exec (no quarshell-init wrap) so layout works before harden paths matter.
 
 // ensureGuestLayout creates durable home/bin under GuestData for agent installs.
-// Uses a raw docker exec (no cautem-init wrap) so layout works before harden paths matter.
+// Uses a raw docker exec (no quarshell-init wrap) so layout works before harden paths matter.
 func (d *Driver) ensureGuestLayout(ctx context.Context, id string) error {
 	info, err := d.cli.ContainerInspect(ctx, id, client.ContainerInspectOptions{})
 	if err != nil || info.Container.Config == nil {
@@ -206,13 +206,13 @@ func (d *Driver) Stop(ctx context.Context, id core.ID) error {
 }
 
 // Exec runs a command in the container. With TTY, attaches stdin/stdout in raw mode.
-// When the sandbox was created with cautem-init, argv is wrapped: cautem-init -- <cmd>.
+// When the sandbox was created with quarshell-init, argv is wrapped: quarshell-init -- <cmd>.
 //
 // Docker ExecCreate Env replaces the process environment when non-empty.
 // We always merge the container's Config.Env first so HTTP_PROXY / CA / HOME from
-// create survive (otherwise `cautem exec` / create `-- agent` cannot reach the sidecar).
+// create survive (otherwise `quarshell exec` / create `-- agent` cannot reach the sidecar).
 
-// Delete removes sandbox container, proxy sidecar, cautem network, and data volume.
+// Delete removes sandbox container, proxy sidecar, quarshell network, and data volume.
 func (d *Driver) Delete(ctx context.Context, id core.ID) error {
 	info, err := d.cli.ContainerInspect(ctx, string(id), client.ContainerInspectOptions{})
 	var manifest cleanupManifest
@@ -280,7 +280,7 @@ func (d *Driver) Delete(ctx context.Context, id core.ID) error {
 	return d.removeCleanupManifest(string(id))
 }
 
-// List returns cautem sandbox containers (excludes proxy sidecars).
+// List returns quarshell sandbox containers (excludes proxy sidecars).
 
 func (d *Driver) stopContainerIfRunning(ctx context.Context, id string) error {
 	info, err := d.cli.ContainerInspect(ctx, id, client.ContainerInspectOptions{})

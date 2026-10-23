@@ -18,7 +18,7 @@ func TestDeviceRequestsForGPU(t *testing.T) {
 	if len(reqs) != 1 || len(reqs[0].DeviceIDs) != 1 || reqs[0].DeviceIDs[0] != "nvidia.com/gpu=0" {
 		t.Fatalf("reqs=%+v", reqs)
 	}
-	t.Setenv("CAUTEM_GPU_CDI", "nvidia.com/gpu=1,nvidia.com/gpu=2")
+	t.Setenv("QUARSHELL_GPU_CDI", "nvidia.com/gpu=1,nvidia.com/gpu=2")
 	reqs = DeviceRequestsForGPU(sandboxCreateSpec{GPU: true})
 	if len(reqs[0].DeviceIDs) != 2 {
 		t.Fatalf("env ids=%v", reqs[0].DeviceIDs)

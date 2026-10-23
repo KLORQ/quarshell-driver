@@ -12,7 +12,7 @@ import (
 	"github.com/KLORQ/quarshell-driver/driver"
 )
 
-// List returns cautem sandbox containers (excludes proxy sidecars).
+// List returns quarshell sandbox containers (excludes proxy sidecars).
 func (d *Driver) List(ctx context.Context) ([]driver.Info, error) {
 	f := client.Filters{}
 	f.Add("label", labelSandbox+"=1")
@@ -74,9 +74,9 @@ func (d *Driver) Inspect(ctx context.Context, nameOrID string) (driver.Info, err
 	return driver.Info{}, fmt.Errorf("docker inspect: sandbox %q not found", nameOrID)
 }
 
-// ContainerIP returns the sandbox container IP on its cautem network.
+// ContainerIP returns the sandbox container IP on its quarshell network.
 
-// ContainerIP returns the sandbox container IP on its cautem network.
+// ContainerIP returns the sandbox container IP on its quarshell network.
 func (d *Driver) ContainerIP(ctx context.Context, containerID, networkName string) (string, error) {
 	if d == nil || d.cli == nil {
 		return "", fmt.Errorf("docker driver: client not initialized")

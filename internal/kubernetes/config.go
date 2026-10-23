@@ -78,8 +78,8 @@ var reservedVolumeNames = map[string]struct{}{
 	"openshell-run":                 {},
 	"workspace":                     {},
 	"quarshell-runtime":             {},
-	"cautem-private":                {},
-	"cautem-run":                    {},
+	"quarshell-private":             {},
+	"quarshell-run":                 {},
 }
 
 var protectedMountRoots = []string{
@@ -94,9 +94,9 @@ var protectedMountRoots = []string{
 	"/sys",
 	"/dev",
 	"/var/run/secrets/openshell",
-	"/cautem",
-	"/run/cautem",
-	"/var/run/cautem",
+	"/quarshell",
+	"/run/quarshell",
+	"/var/run/quarshell",
 }
 
 // ParseSandboxDriverConfig strictly decodes and validates the backend-owned

@@ -23,7 +23,7 @@ case "$runner_uid" in
   0) echo "live KVM acceptance must run as a non-root user with explicit access to KVM" >&2; exit 2 ;;
 esac
 
-kvm_device=${CAUTEM_KVM_DEVICE:-/dev/kvm}
+kvm_device=${QUARSHELL_KVM_DEVICE:-/dev/kvm}
 if [ ! -c "$kvm_device" ] || [ ! -r "$kvm_device" ] || [ ! -w "$kvm_device" ]; then
   echo "live KVM acceptance requires a readable and writable KVM character device at $kvm_device" >&2
   exit 2
@@ -38,17 +38,17 @@ if [ ! -s "$runtime_dir/libkrun.so" ] || [ ! -s "$runtime_dir/libkrunfw.so.5" ];
   echo "libkrun Linux runtime bundle is incomplete in $runtime_dir" >&2
   exit 2
 fi
-runtime_trust_lock=${CAUTEM_VM_RUNTIME_TRUST_LOCK:-}
+runtime_trust_lock=${QUARSHELL_VM_RUNTIME_TRUST_LOCK:-}
 if [ -z "$runtime_trust_lock" ] || [ ! -s "$runtime_trust_lock" ]; then
-  echo "CAUTEM_VM_RUNTIME_TRUST_LOCK must point to an operator-approved runtime digest lock outside the checkout" >&2
+  echo "QUARSHELL_VM_RUNTIME_TRUST_LOCK must point to an operator-approved runtime digest lock outside the checkout" >&2
   exit 2
 fi
 
-build_dir=${CAUTEM_VM_BUILD_DIR:-"$(mktemp -d "${TMPDIR:-/tmp}/cautem-kvm-acceptance.XXXXXX")"}
+build_dir=${QUARSHELL_VM_BUILD_DIR:-"$(mktemp -d "${TMPDIR:-/tmp}/quarshell-kvm-acceptance.XXXXXX")"}
 mkdir -p "$build_dir"
 python3 "$script_dir/verify-vm-runtime-libraries.py" "$runtime_dir" "$host_arch" "$runtime_trust_lock" "$build_dir/vm-runtime-libraries.json"
 cleanup_dir=
-if [ -z "${CAUTEM_VM_BUILD_DIR:-}" ]; then
+if [ -z "${QUARSHELL_VM_BUILD_DIR:-}" ]; then
   cleanup_dir=$build_dir
 fi
 container_id=
@@ -68,12 +68,12 @@ trap 'exit 129' HUP
 trap 'exit 130' INT
 trap 'exit 143' TERM
 
-guest_agent=${CAUTEM_VM_TEST_GUEST_AGENT:-"$build_dir/cautem-vm-guest-agent-linux-$host_arch"}
-worker=${CAUTEM_VM_WORKER:-"$build_dir/cautem-vm-worker"}
-security_probe=${CAUTEM_VM_TEST_SECURITY_PROBE:-"$build_dir/cautem-vm-security-probe-linux-$host_arch"}
+guest_agent=${QUARSHELL_VM_TEST_GUEST_AGENT:-"$build_dir/quarshell-vm-guest-agent-linux-$host_arch"}
+worker=${QUARSHELL_VM_WORKER:-"$build_dir/quarshell-vm-worker"}
+security_probe=${QUARSHELL_VM_TEST_SECURITY_PROBE:-"$build_dir/quarshell-vm-security-probe-linux-$host_arch"}
 manifest="$build_dir/vm-runtime-manifest.json"
 if ! python3 "$script_dir/verify-vm-runtime-manifest.py" "$manifest" "linux/$host_arch" "$host_arch" >/dev/null 2>&1; then
-  CAUTEM_VM_BUILD_DIR=$build_dir CAUTEM_VM_GUEST_ARCH=$host_arch "$script_dir/build-vm-runtime.sh"
+  QUARSHELL_VM_BUILD_DIR=$build_dir QUARSHELL_VM_GUEST_ARCH=$host_arch "$script_dir/build-vm-runtime.sh"
 fi
 python3 "$script_dir/verify-vm-runtime-manifest.py" "$manifest" "linux/$host_arch" "$host_arch"
 if [ ! -x "$guest_agent" ] || [ ! -x "$worker" ]; then
@@ -81,7 +81,7 @@ if [ ! -x "$guest_agent" ] || [ ! -x "$worker" ]; then
   exit 1
 fi
 
-rootfs_tar=${CAUTEM_VM_TEST_ROOTFS_TAR:-}
+rootfs_tar=${QUARSHELL_VM_TEST_ROOTFS_TAR:-}
 if [ -z "$rootfs_tar" ]; then
   if ! command -v docker >/dev/null 2>&1; then
     echo "Docker is required to prepare the default Alpine Linux rootfs" >&2
@@ -99,33 +99,33 @@ if [ ! -s "$rootfs_tar" ]; then
   exit 2
 fi
 
-formatter=${CAUTEM_VM_TEST_E2FS_FORMATTER:-}
+formatter=${QUARSHELL_VM_TEST_E2FS_FORMATTER:-}
 if [ -z "$formatter" ]; then
   formatter=$(command -v mke2fs || command -v mkfs.ext4 || true)
 fi
 if [ -z "$formatter" ] || [ ! -x "$formatter" ]; then
-  echo "e2fsprogs is required; set CAUTEM_VM_TEST_E2FS_FORMATTER or install mke2fs" >&2
+  echo "e2fsprogs is required; set QUARSHELL_VM_TEST_E2FS_FORMATTER or install mke2fs" >&2
   exit 2
 fi
 
 cd "$vm_module_dir"
-test_name=${CAUTEM_VM_TEST_NAME:-TestLiveMicroVMLifecycle}
+test_name=${QUARSHELL_VM_TEST_NAME:-TestLiveMicroVMLifecycle}
 case "$test_name" in
   TestLiveMicroVMLifecycle|TestLiveMicroVMNestedDocker|TestLiveMicroVMNestedPodman|TestLiveMicroVMNestedPodmanRootless) ;;
   *) echo "unsupported live KVM acceptance test: $test_name" >&2; exit 2 ;;
 esac
-CAUTEM_KVM_DEVICE=$kvm_device \
-CAUTEM_VM_ACCEPTANCE=1 \
-CAUTEM_VM_TEST_ROOTFS_TAR=$rootfs_tar \
-CAUTEM_VM_TEST_GUEST_AGENT=$guest_agent \
-CAUTEM_VM_TEST_INIT_BIN=${CAUTEM_VM_TEST_INIT_BIN:-"$build_dir/cautem-init-linux-$host_arch"} \
-CAUTEM_VM_TEST_SUPERVISOR_BIN=${CAUTEM_VM_TEST_SUPERVISOR_BIN:-"$build_dir/cautem-supervisor-linux-$host_arch"} \
-CAUTEM_VM_TEST_SSH_BIN=${CAUTEM_VM_TEST_SSH_BIN:-"$build_dir/cautem-sshd-linux-$host_arch"} \
-CAUTEM_VM_TEST_SECURITY_PROBE=$security_probe \
-CAUTEM_VM_TEST_E2FS_FORMATTER=$formatter \
-CAUTEM_VM_WORKER=$worker \
+QUARSHELL_KVM_DEVICE=$kvm_device \
+QUARSHELL_VM_ACCEPTANCE=1 \
+QUARSHELL_VM_TEST_ROOTFS_TAR=$rootfs_tar \
+QUARSHELL_VM_TEST_GUEST_AGENT=$guest_agent \
+QUARSHELL_VM_TEST_INIT_BIN=${QUARSHELL_VM_TEST_INIT_BIN:-"$build_dir/quarshell-init-linux-$host_arch"} \
+QUARSHELL_VM_TEST_SUPERVISOR_BIN=${QUARSHELL_VM_TEST_SUPERVISOR_BIN:-"$build_dir/quarshell-supervisor-linux-$host_arch"} \
+QUARSHELL_VM_TEST_SSH_BIN=${QUARSHELL_VM_TEST_SSH_BIN:-"$build_dir/quarshell-sshd-linux-$host_arch"} \
+QUARSHELL_VM_TEST_SECURITY_PROBE=$security_probe \
+QUARSHELL_VM_TEST_E2FS_FORMATTER=$formatter \
+QUARSHELL_VM_WORKER=$worker \
 OPENSHELL_VM_RUNTIME_DIR=$runtime_dir \
-CAUTEM_VM_TEST_ARTIFACT_DIR=$build_dir \
-CAUTEM_VM_TEST_JSON_LOG="$build_dir/test-events-$test_name.jsonl" \
+QUARSHELL_VM_TEST_ARTIFACT_DIR=$build_dir \
+QUARSHELL_VM_TEST_JSON_LOG="$build_dir/test-events-$test_name.jsonl" \
 python3 "$script_dir/run-required-go-test.py" --test "$test_name" -- \
-  go test -json ./vm -run "^$test_name$" -count=1 -v
+  go test -timeout=20m -json ./vm -run "^$test_name$" -count=1 -v

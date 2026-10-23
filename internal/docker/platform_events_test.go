@@ -34,7 +34,7 @@ func TestWatchPlatformEventsFiltersAndSanitizes(t *testing.T) {
 		<-r.Context().Done()
 	}))
 	t.Cleanup(server.Close)
-	engine, err := client.NewClientWithOpts(client.WithHost(server.URL), client.WithVersion("1.47"))
+	engine, err := client.New(client.WithHost(server.URL), client.WithAPIVersion("1.47"))
 	if err != nil {
 		t.Fatal(err)
 	}

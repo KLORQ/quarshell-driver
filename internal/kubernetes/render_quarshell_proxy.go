@@ -12,12 +12,12 @@ import (
 )
 
 const (
-	cautemProxyListenPort = int64(3128)
-	cautemProxyImageName  = "quarshell-proxy"
-	cautemProxyRuntimeDir = "/var/run/cautem/runtime"
+	quarshellProxyListenPort = int64(3128)
+	quarshellProxyImageName  = "quarshell-proxy"
+	quarshellProxyRuntimeDir = "/var/run/quarshell/runtime"
 )
 
-type cautemProxyPodRenderParams struct {
+type quarshellProxyPodRenderParams struct {
 	Namespace                 string
 	SandboxResourceName       string
 	SandboxResourceAPIVersion string
@@ -37,10 +37,10 @@ type cautemProxyPodRenderParams struct {
 	ControlGID                int64
 }
 
-// renderCautemProxyPod renders the trusted proxy companion. Its listener is a
+// renderQuarshellProxyPod renders the trusted proxy companion. Its listener is a
 // Pod-local bind address; workload clients use the separate Service endpoint.
-func renderCautemProxyPod(input cautemProxyPodRenderParams) (map[string]any, error) {
-	params, err := validateCautemProxyPodRenderParams(input)
+func renderQuarshellProxyPod(input quarshellProxyPodRenderParams) (map[string]any, error) {
+	params, err := validateQuarshellProxyPodRenderParams(input)
 	if err != nil {
 		return nil, err
 	}
@@ -57,30 +57,30 @@ func renderCautemProxyPod(input cautemProxyPodRenderParams) (map[string]any, err
 	labels[labelBoundaryPair] = id
 	labels[labelBoundaryRole] = "supervisor"
 	container := map[string]any{
-		"name":            cautemProxyImageName,
+		"name":            quarshellProxyImageName,
 		"image":           params.ProxyImage,
 		"imagePullPolicy": params.ProxyImagePullPolicy,
-		"command":         cautemProxyCommand(),
+		"command":         quarshellProxyCommand(),
 		"env": []any{
-			map[string]any{"name": "CAUTEM_GATEWAY_URL", "value": params.GatewayURL},
-			map[string]any{"name": "CAUTEM_GATEWAY_GRPC_ENDPOINT", "value": params.GatewayGRPCEndpoint},
-			map[string]any{"name": "CAUTEM_SANDBOX", "value": params.SandboxName},
-			map[string]any{"name": "CAUTEM_SANDBOX_TOKEN_FILE", "value": cautemProxyRuntimeDir + "/sandbox-token"},
-			map[string]any{"name": "CAUTEM_LOG_DIR", "value": "/tmp/cautem-logs"},
-			map[string]any{"name": "CAUTEM_SUPERVISOR_CONTROL_LISTEN", "value": "0.0.0.0:5502"},
-			map[string]any{"name": "CAUTEM_SUPERVISOR_CONTROL_SERVER_CA", "value": cautemProxyRuntimeDir + "/control-server-ca.pem"},
-			map[string]any{"name": "CAUTEM_SUPERVISOR_CONTROL_SERVER_CERT", "value": cautemProxyRuntimeDir + "/control-server.crt"},
-			map[string]any{"name": "CAUTEM_SUPERVISOR_CONTROL_SERVER_KEY", "value": cautemProxyRuntimeDir + "/control-server.key"},
-			map[string]any{"name": "CAUTEM_RELAY_TARGET_ENDPOINT", "value": net.JoinHostPort(runtimeServiceFQDN("os-boundary-"+id, params.Namespace), fmt.Sprint(params.BoundaryPort))},
-			map[string]any{"name": "CAUTEM_RELAY_TARGET_SERVER_CA", "value": cautemProxyRuntimeDir + "/target-server-ca.pem"},
-			map[string]any{"name": "CAUTEM_RELAY_TARGET_CLIENT_CERT", "value": cautemProxyRuntimeDir + "/target-client.crt"},
-			map[string]any{"name": "CAUTEM_RELAY_TARGET_CLIENT_KEY", "value": cautemProxyRuntimeDir + "/target-client.key"},
+			map[string]any{"name": "QUARSHELL_GATEWAY_URL", "value": params.GatewayURL},
+			map[string]any{"name": "QUARSHELL_GATEWAY_GRPC_ENDPOINT", "value": params.GatewayGRPCEndpoint},
+			map[string]any{"name": "QUARSHELL_SANDBOX", "value": params.SandboxName},
+			map[string]any{"name": "QUARSHELL_SANDBOX_TOKEN_FILE", "value": quarshellProxyRuntimeDir + "/sandbox-token"},
+			map[string]any{"name": "QUARSHELL_LOG_DIR", "value": "/tmp/quarshell-logs"},
+			map[string]any{"name": "QUARSHELL_SUPERVISOR_CONTROL_LISTEN", "value": "0.0.0.0:5502"},
+			map[string]any{"name": "QUARSHELL_SUPERVISOR_CONTROL_SERVER_CA", "value": quarshellProxyRuntimeDir + "/control-server-ca.pem"},
+			map[string]any{"name": "QUARSHELL_SUPERVISOR_CONTROL_SERVER_CERT", "value": quarshellProxyRuntimeDir + "/control-server.crt"},
+			map[string]any{"name": "QUARSHELL_SUPERVISOR_CONTROL_SERVER_KEY", "value": quarshellProxyRuntimeDir + "/control-server.key"},
+			map[string]any{"name": "QUARSHELL_RELAY_TARGET_ENDPOINT", "value": net.JoinHostPort(runtimeServiceFQDN("os-boundary-"+id, params.Namespace), fmt.Sprint(params.BoundaryPort))},
+			map[string]any{"name": "QUARSHELL_RELAY_TARGET_SERVER_CA", "value": quarshellProxyRuntimeDir + "/target-server-ca.pem"},
+			map[string]any{"name": "QUARSHELL_RELAY_TARGET_CLIENT_CERT", "value": quarshellProxyRuntimeDir + "/target-client.crt"},
+			map[string]any{"name": "QUARSHELL_RELAY_TARGET_CLIENT_KEY", "value": quarshellProxyRuntimeDir + "/target-client.key"},
 		},
 		"envFrom": []any{map[string]any{"secretRef": map[string]any{
 			"name": generationSecretName(proxyEnvSecretPrefix, params.SandboxID, params.Generation),
 		}}},
 		"ports": []any{
-			map[string]any{"name": "proxy", "containerPort": cautemProxyListenPort, "protocol": "TCP"},
+			map[string]any{"name": "proxy", "containerPort": quarshellProxyListenPort, "protocol": "TCP"},
 			map[string]any{"name": "sup-control", "containerPort": supervisorControlPort, "protocol": "TCP"},
 		},
 		"readinessProbe": map[string]any{
@@ -96,15 +96,15 @@ func renderCautemProxyPod(input cautemProxyPodRenderParams) (map[string]any, err
 			"capabilities":             map[string]any{"drop": []any{"ALL"}},
 		},
 		"volumeMounts": []any{
-			map[string]any{"name": "runtime", "mountPath": cautemProxyRuntimeDir, "readOnly": true},
+			map[string]any{"name": "runtime", "mountPath": quarshellProxyRuntimeDir, "readOnly": true},
 			map[string]any{"name": "tmp", "mountPath": "/tmp"},
 		},
 	}
 	if params.GatewayTLS {
 		container["env"] = append(sliceValue(container["env"]),
-			map[string]any{"name": "CAUTEM_GUEST_TLS_CA", "value": cautemProxyRuntimeDir + "/" + cautemGatewayTLSCAKey},
-			map[string]any{"name": "CAUTEM_GUEST_TLS_CERT", "value": cautemProxyRuntimeDir + "/" + cautemGatewayTLSCertKey},
-			map[string]any{"name": "CAUTEM_GUEST_TLS_KEY", "value": cautemProxyRuntimeDir + "/" + cautemGatewayTLSKeyKey},
+			map[string]any{"name": "QUARSHELL_GUEST_TLS_CA", "value": quarshellProxyRuntimeDir + "/" + quarshellGatewayTLSCAKey},
+			map[string]any{"name": "QUARSHELL_GUEST_TLS_CERT", "value": quarshellProxyRuntimeDir + "/" + quarshellGatewayTLSCertKey},
+			map[string]any{"name": "QUARSHELL_GUEST_TLS_KEY", "value": quarshellProxyRuntimeDir + "/" + quarshellGatewayTLSKeyKey},
 		)
 	}
 	return map[string]any{
@@ -142,12 +142,12 @@ func renderCautemProxyPod(input cautemProxyPodRenderParams) (map[string]any, err
 	}, nil
 }
 
-func cautemProxyCommand() []any {
-	return []any{"/usr/local/bin/cautem", "proxy", "--listen", "0.0.0.0:3128", "--policy", cautemProxyRuntimeDir + "/policy.yaml"}
+func quarshellProxyCommand() []any {
+	return []any{"/usr/local/bin/quarshell", "proxy", "--listen", "0.0.0.0:3128", "--policy", quarshellProxyRuntimeDir + "/policy.yaml"}
 }
 
-func cautemProxyCommandStrings() []string {
-	command := cautemProxyCommand()
+func quarshellProxyCommandStrings() []string {
+	command := quarshellProxyCommand()
 	result := make([]string, len(command))
 	for index, value := range command {
 		result[index], _ = value.(string)
@@ -155,7 +155,7 @@ func cautemProxyCommandStrings() []string {
 	return result
 }
 
-func validateCautemProxyPodRenderParams(input cautemProxyPodRenderParams) (cautemProxyPodRenderParams, error) {
+func validateQuarshellProxyPodRenderParams(input quarshellProxyPodRenderParams) (quarshellProxyPodRenderParams, error) {
 	params := input
 	if err := requireDNS1123Label("namespace", params.Namespace); err != nil {
 		return params, err
@@ -180,25 +180,25 @@ func validateCautemProxyPodRenderParams(input cautemProxyPodRenderParams) (caute
 	}
 	imageParts := strings.Split(params.ProxyImage, "@sha256:")
 	if len(imageParts) != 2 || strings.TrimSpace(imageParts[0]) == "" || len(imageParts[1]) != 64 {
-		return params, fmt.Errorf("cautem proxy image must be pinned by sha256 digest")
+		return params, fmt.Errorf("quarshell proxy image must be pinned by sha256 digest")
 	}
 	if _, err := hex.DecodeString(imageParts[1]); err != nil {
-		return params, fmt.Errorf("cautem proxy image must use a valid sha256 digest")
+		return params, fmt.Errorf("quarshell proxy image must use a valid sha256 digest")
 	}
-	if err := validateImagePullPolicy("cautem proxy image pull policy", params.ProxyImagePullPolicy); err != nil {
+	if err := validateImagePullPolicy("quarshell proxy image pull policy", params.ProxyImagePullPolicy); err != nil {
 		return params, err
 	}
 	if params.ProxyImagePullPolicy == "" {
 		params.ProxyImagePullPolicy = "IfNotPresent"
 	}
-	if err := validateCautemGatewayURL("Gateway HTTP URL", params.GatewayURL); err != nil {
+	if err := validateQuarshellGatewayURL("Gateway HTTP URL", params.GatewayURL); err != nil {
 		return params, err
 	}
 	parsedGateway, _ := url.Parse(strings.TrimSpace(params.GatewayURL))
 	if (parsedGateway.Scheme == "https") != params.GatewayTLS {
-		return params, fmt.Errorf("cautem proxy guest TLS setting must match the Gateway URL scheme")
+		return params, fmt.Errorf("quarshell proxy guest TLS setting must match the Gateway URL scheme")
 	}
-	if err := validateCautemGatewayEndpoint(params.GatewayGRPCEndpoint); err != nil {
+	if err := validateQuarshellGatewayEndpoint(params.GatewayGRPCEndpoint); err != nil {
 		return params, err
 	}
 	if params.BoundaryPort < 1024 || params.BoundaryPort > 65535 {
@@ -229,7 +229,7 @@ func validateCautemProxyPodRenderParams(input cautemProxyPodRenderParams) (caute
 	return params, nil
 }
 
-func validateCautemGatewayURL(field, raw string) error {
+func validateQuarshellGatewayURL(field, raw string) error {
 	parsed, err := url.Parse(strings.TrimSpace(raw))
 	if err != nil || (parsed.Scheme != "http" && parsed.Scheme != "https") || parsed.Host == "" || parsed.User != nil || parsed.Fragment != "" {
 		return fmt.Errorf("%s must be an absolute HTTP(S) URL without user info or fragment", field)
@@ -240,7 +240,7 @@ func validateCautemGatewayURL(field, raw string) error {
 	return nil
 }
 
-func validateCautemGatewayEndpoint(raw string) error {
+func validateQuarshellGatewayEndpoint(raw string) error {
 	raw = strings.TrimSpace(raw)
 	if raw == "" {
 		return nil

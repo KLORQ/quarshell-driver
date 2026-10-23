@@ -15,8 +15,8 @@ import (
 )
 
 func TestPodmanLegacyRejectsUnsupportedNetworkBeforeWorkloadStart(t *testing.T) {
-	if os.Getenv("CAUTEM_PODMAN_LEGACY_NEGATIVE") != "1" {
-		t.Skip("set CAUTEM_PODMAN_LEGACY_NEGATIVE=1 to run the Podman 5.8.7 negative compatibility lane")
+	if os.Getenv("QUARSHELL_PODMAN_LEGACY_NEGATIVE") != "1" {
+		t.Skip("set QUARSHELL_PODMAN_LEGACY_NEGATIVE=1 to run the Podman 5.8.7 negative compatibility lane")
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 	defer cancel()
@@ -55,7 +55,7 @@ func TestPodmanLegacyRejectsUnsupportedNetworkBeforeWorkloadStart(t *testing.T) 
 	if err := os.WriteFile(policyPath, []byte("version: 1\nnetwork_policies: {}\n"), 0o600); err != nil {
 		t.Fatalf("write policy fixture: %v", err)
 	}
-	networkPrefix := "cautem-podman-legacy-negative"
+	networkPrefix := "quarshell-podman-legacy-negative"
 	name := "legacy-negative-" + time.Now().Format("150405000000000")
 	engine, err := podman.NewWithConfig(podman.Config{
 		ImagePullPolicy: "missing", NetworkName: networkPrefix, UsernsMode: "host",
@@ -82,7 +82,7 @@ func TestPodmanLegacyRejectsUnsupportedNetworkBeforeWorkloadStart(t *testing.T) 
 		t.Fatalf("legacy Podman create error = %v; want explicit fail-closed blackhole capability error", createErr)
 	}
 
-	containerName := "cautem-" + name
+	containerName := "quarshell-" + name
 	containers, err := engineClient.ContainerList(ctx, client.ContainerListOptions{All: true})
 	if err != nil {
 		t.Fatalf("list containers after isolation rejection: %v", err)

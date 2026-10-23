@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2026 the cautem authors
+# SPDX-FileCopyrightText: Copyright (c) 2026 the quarshell authors
 # SPDX-License-Identifier: Apache-2.0
 name: Live VM KVM acceptance
 
@@ -19,15 +19,15 @@ jobs:
       matrix:
         include:
           - arch: amd64
-            runner: [self-hosted, linux, x64, cautem-kvm]
+            runner: [self-hosted, linux, x64, quarshell-kvm]
           - arch: arm64
-            runner: [self-hosted, linux, ARM64, cautem-kvm]
+            runner: [self-hosted, linux, ARM64, quarshell-kvm]
     timeout-minutes: 40
     env:
       OPENSHELL_VM_RUNTIME_DIR: ${{ vars.OPENSHELL_VM_RUNTIME_DIR }}
       # Configure as an absolute path on each trusted self-hosted runner, outside the checkout.
-      CAUTEM_VM_RUNTIME_TRUST_LOCK: ${{ vars.CAUTEM_VM_RUNTIME_TRUST_LOCK }}
-      CAUTEM_VM_GUEST_ARCH: ${{ matrix.arch }}
+      QUARSHELL_VM_RUNTIME_TRUST_LOCK: ${{ vars.QUARSHELL_VM_RUNTIME_TRUST_LOCK }}
+      QUARSHELL_VM_GUEST_ARCH: ${{ matrix.arch }}
     steps:
       - name: Checkout quarshell-driver
         uses: actions/checkout@v4
@@ -38,34 +38,28 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: KLORQ/quarshell-core
-          ref: v0.4.2
+          ref: v0.5.0
           path: quarshell-core
 
       - name: Checkout quarshell-runtime helpers
         uses: actions/checkout@v4
         with:
           repository: KLORQ/quarshell-runtime
-          ref: v0.1.1
+          ref: v0.1.2
           path: quarshell-runtime
 
       - name: Checkout quarshell-proto workspace dependency
         uses: actions/checkout@v4
         with:
           repository: KLORQ/quarshell-proto
-          ref: v0.2.2
+          ref: v0.2.3
           path: quarshell-proto
       - name: Checkout quarshell-proxy workspace dependency
         uses: actions/checkout@v4
         with:
           repository: KLORQ/quarshell-proxy
-          ref: v0.1.1
+          ref: v0.1.2
           path: quarshell-proxy
-      - name: Checkout quarshell-slogx workspace dependency
-        uses: actions/checkout@v4
-        with:
-          repository: KLORQ/quarshell-slogx
-          ref: v0.1.5
-          path: quarshell-slogx
       - name: Configure Go workspace
         working-directory: ${{ github.workspace }}
         shell: bash
@@ -95,7 +89,7 @@ jobs:
           echo "Wrote go.work:" && cat "$workspace/go.work"
       - uses: actions/setup-go@v5
         with:
-          go-version: 1.27.2
+          go-version: 1.27.3
           cache: true
           cache-dependency-path: |
             quarshell-driver/go.sum
@@ -105,7 +99,7 @@ jobs:
       - name: Verify Linux KVM and run live VM lifecycle
         working-directory: quarshell-driver
         env:
-          CAUTEM_VM_BUILD_DIR: ${{ runner.temp }}/cautem-vm-runtime
+          QUARSHELL_VM_BUILD_DIR: ${{ runner.temp }}/quarshell-vm-runtime
         run: |
           ./scripts/test-live-kvm-script.sh
           ./scripts/run-live-kvm-acceptance.sh
@@ -113,23 +107,23 @@ jobs:
       - name: Run Docker inside a trusted Linux MicroVM
         working-directory: quarshell-driver
         env:
-          CAUTEM_VM_BUILD_DIR: ${{ runner.temp }}/cautem-vm-runtime
+          QUARSHELL_VM_BUILD_DIR: ${{ runner.temp }}/quarshell-vm-runtime
           E2E_KEEP_TMP: "1"
         run: ./scripts/run-live-kvm-docker-acceptance.sh
 
       - name: Run Podman 6 inside a trusted Linux MicroVM
         working-directory: quarshell-driver
         env:
-          CAUTEM_VM_BUILD_DIR: ${{ runner.temp }}/cautem-vm-runtime
+          QUARSHELL_VM_BUILD_DIR: ${{ runner.temp }}/quarshell-vm-runtime
           E2E_KEEP_TMP: "1"
         run: ./scripts/run-live-kvm-podman-acceptance.sh
 
       - name: Run rootless Podman 6 inside a trusted Linux MicroVM
         working-directory: quarshell-driver
         env:
-          CAUTEM_VM_BUILD_DIR: ${{ runner.temp }}/cautem-vm-runtime
-          CAUTEM_VM_PODMAN_ROOTLESS_ACCEPTANCE: "1"
-          CAUTEM_VM_TEST_NAME: TestLiveMicroVMNestedPodmanRootless
+          QUARSHELL_VM_BUILD_DIR: ${{ runner.temp }}/quarshell-vm-runtime
+          QUARSHELL_VM_PODMAN_ROOTLESS_ACCEPTANCE: "1"
+          QUARSHELL_VM_TEST_NAME: TestLiveMicroVMNestedPodmanRootless
           E2E_KEEP_TMP: "1"
         run: ./scripts/run-live-kvm-podman-acceptance.sh
 
@@ -139,19 +133,19 @@ jobs:
         with:
           name: engines-in-microvm-${{ matrix.arch }}-${{ github.run_id }}
           path: |
-            ${{ runner.temp }}/cautem-vm-runtime/vm-runtime-manifest.json
-            ${{ runner.temp }}/cautem-vm-runtime/vm-runtime-libraries.json
-            ${{ runner.temp }}/cautem-vm-runtime/test-events-*.jsonl
-            ${{ runner.temp }}/cautem-vm-runtime/console-tail-*.log
-            ${{ runner.temp }}/cautem-vm-runtime/nested-docker-fixture/docker-engine-rootfs.tar
-            ${{ runner.temp }}/cautem-vm-runtime/nested-docker-fixture/alpine-image.tar
-            ${{ runner.temp }}/cautem-vm-runtime/nested-podman-fixture/podman-engine-rootfs.tar
-            ${{ runner.temp }}/cautem-vm-runtime/nested-podman-fixture/alpine-image.tar
-            ${{ runner.temp }}/cautem-vm-runtime/nested-podman-fixture/podman6-fixture-image-id.txt
+            ${{ runner.temp }}/quarshell-vm-runtime/vm-runtime-manifest.json
+            ${{ runner.temp }}/quarshell-vm-runtime/vm-runtime-libraries.json
+            ${{ runner.temp }}/quarshell-vm-runtime/test-events-*.jsonl
+            ${{ runner.temp }}/quarshell-vm-runtime/console-tail-*.log
+            ${{ runner.temp }}/quarshell-vm-runtime/nested-docker-fixture/docker-engine-rootfs.tar
+            ${{ runner.temp }}/quarshell-vm-runtime/nested-docker-fixture/alpine-image.tar
+            ${{ runner.temp }}/quarshell-vm-runtime/nested-podman-fixture/podman-engine-rootfs.tar
+            ${{ runner.temp }}/quarshell-vm-runtime/nested-podman-fixture/alpine-image.tar
+            ${{ runner.temp }}/quarshell-vm-runtime/nested-podman-fixture/podman6-fixture-image-id.txt
             quarshell-driver/scripts/vm-engine-fixtures.lock.json
           if-no-files-found: ignore
           retention-days: 7
 
       - name: Remove this run's VM runtime and engine fixtures
         if: always()
-        run: rm -rf "${{ runner.temp }}/cautem-vm-runtime"
+        run: rm -rf "${{ runner.temp }}/quarshell-vm-runtime"

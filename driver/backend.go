@@ -299,6 +299,13 @@ type InteractiveExecStream interface {
 	OpenExecStream(context.Context, core.ID, ExecTerminalRequest) (ExecStreamSession, error)
 }
 
+// MainProcessStream attaches to a retained canonical workload that was started
+// without a PTY. Output streams remain separate and stdin has one attachment
+// owner at a time.
+type MainProcessStream interface {
+	OpenMainProcessStream(context.Context, core.ID) (ExecStreamSession, error)
+}
+
 // ExecTerminalInputCloser signals end-of-input without closing the terminal
 // output stream.
 type ExecTerminalInputCloser interface {

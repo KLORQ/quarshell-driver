@@ -43,29 +43,29 @@ func attachRuntimeBridgeCredentials(secrets []map[string]any, identity agentSand
 		return errors.New("runtime bridge credentials require valid workload and supervisor Service IPs")
 	}
 	now := time.Now()
-	targetCA, targetCAKey, targetCAPEM, err := newBridgeCA("cautem-target-"+identity.SandboxID, now)
+	targetCA, targetCAKey, targetCAPEM, err := newBridgeCA("quarshell-target-"+identity.SandboxID, now)
 	if err != nil {
 		return err
 	}
-	controlCA, controlCAKey, controlCAPEM, err := newBridgeCA("cautem-control-"+identity.SandboxID, now)
+	controlCA, controlCAKey, controlCAPEM, err := newBridgeCA("quarshell-control-"+identity.SandboxID, now)
 	if err != nil {
 		return err
 	}
 	targetService := runtimeServiceFQDN("os-boundary-"+strings.ToLower(identity.SandboxID), identity.Namespace)
 	controlService := runtimeServiceFQDN("os-supervisor-"+strings.ToLower(identity.SandboxID), identity.Namespace)
-	targetServerCert, targetServerKey, err := newBridgeLeafWithDNS("cautem-target-server", workloadIP, []string{targetService}, targetCA, targetCAKey, now, x509.ExtKeyUsageServerAuth)
+	targetServerCert, targetServerKey, err := newBridgeLeafWithDNS("quarshell-target-server", workloadIP, []string{targetService}, targetCA, targetCAKey, now, x509.ExtKeyUsageServerAuth)
 	if err != nil {
 		return err
 	}
-	targetClientCert, targetClientKey, err := newBridgeLeaf("cautem-target-client", nil, targetCA, targetCAKey, now, x509.ExtKeyUsageClientAuth)
+	targetClientCert, targetClientKey, err := newBridgeLeaf("quarshell-target-client", nil, targetCA, targetCAKey, now, x509.ExtKeyUsageClientAuth)
 	if err != nil {
 		return err
 	}
-	controlServerCert, controlServerKey, err := newBridgeLeafWithDNS("cautem-control-server", controlIP, []string{controlService}, controlCA, controlCAKey, now, x509.ExtKeyUsageServerAuth)
+	controlServerCert, controlServerKey, err := newBridgeLeafWithDNS("quarshell-control-server", controlIP, []string{controlService}, controlCA, controlCAKey, now, x509.ExtKeyUsageServerAuth)
 	if err != nil {
 		return err
 	}
-	controlClientCert, controlClientKey, err := newBridgeLeaf("cautem-control-client", nil, controlCA, controlCAKey, now, x509.ExtKeyUsageClientAuth)
+	controlClientCert, controlClientKey, err := newBridgeLeaf("quarshell-control-client", nil, controlCA, controlCAKey, now, x509.ExtKeyUsageClientAuth)
 	if err != nil {
 		return err
 	}

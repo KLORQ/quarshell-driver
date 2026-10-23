@@ -9,20 +9,20 @@ import (
 	"github.com/KLORQ/quarshell-driver/driver"
 )
 
-func TestDriverCreateRunsCautemCreateSequence(t *testing.T) {
+func TestDriverCreateRunsQuarshellCreateSequence(t *testing.T) {
 	workspace := "team-a"
 	policyPath := t.TempDir() + "/policy.yaml"
 	if err := os.WriteFile(policyPath, []byte("version: 1\n"), 0o600); err != nil {
 		t.Fatalf("write policy fixture: %v", err)
 	}
 	config := BackendConfig{
-		GatewayID: "gateway-1", ProxyImage: "ghcr.io/cautem/quarshell-proxy@sha256:" + strings.Repeat("a", 64),
-		SandboxRuntimeImage: "ghcr.io/cautem/runtime@sha256:" + strings.Repeat("b", 64),
+		GatewayID: "gateway-1", ProxyImage: "ghcr.io/quarshell/quarshell-proxy@sha256:" + strings.Repeat("a", 64),
+		SandboxRuntimeImage: "ghcr.io/quarshell/runtime@sha256:" + strings.Repeat("b", 64),
 		GRPCEndpoint:        "gateway.example:7443",
 	}
 	config.applyDefaults()
 	backend := newFakeAgentSandboxCreateBackend()
-	backend.useRequestedCautemPods = true
+	backend.useRequestedQuarshellPods = true
 	backend.sandboxID = "team-a-demo"
 	d := newWithClient(newFakeAgentSandboxDynamicClient(), config.GatewayID)
 	d.runtimeConfig = config
@@ -35,9 +35,9 @@ func TestDriverCreateRunsCautemCreateSequence(t *testing.T) {
 		Network: driver.NetworkSpec{
 			GatewayID: config.GatewayID, GatewayURL: "http://gateway.example:7443",
 			Proxy: &driver.ProxySpec{PolicyPath: policyPath, Environment: []string{
-				"CAUTEM_GATEWAY_URL=http://gateway.example:7443",
-				"CAUTEM_SANDBOX=team-a-demo",
-				"CAUTEM_SANDBOX_TOKEN=test-sandbox-token",
+				"QUARSHELL_GATEWAY_URL=http://gateway.example:7443",
+				"QUARSHELL_SANDBOX=team-a-demo",
+				"QUARSHELL_SANDBOX_TOKEN=test-sandbox-token",
 			}},
 		},
 	}
@@ -68,7 +68,7 @@ func TestDriverCreateRunsCautemCreateSequence(t *testing.T) {
 		Workload:  driver.WorkloadSpec{Image: "registry.example/sandbox:v1", Command: []string{"/bin/sh"}},
 		Network: driver.NetworkSpec{
 			GatewayID: config.GatewayID, GatewayURL: "http://gateway.example:7443",
-			Proxy: &driver.ProxySpec{PolicyPath: policyPath, Environment: []string{"CAUTEM_GATEWAY_URL=http://gateway.example:7443", "CAUTEM_SANDBOX=team-a-native", "CAUTEM_SANDBOX_TOKEN=native-token"}},
+			Proxy: &driver.ProxySpec{PolicyPath: policyPath, Environment: []string{"QUARSHELL_GATEWAY_URL=http://gateway.example:7443", "QUARSHELL_SANDBOX=team-a-native", "QUARSHELL_SANDBOX_TOKEN=native-token"}},
 		},
 	}
 	if err := native.ValidateCreate(context.Background(), request); err != nil {
@@ -86,8 +86,8 @@ func TestDriverCreateRunsCautemCreateSequence(t *testing.T) {
 func TestKubernetesBackendRegistrationUsesValidatedConfig(t *testing.T) {
 	backend, registered, err := driver.OpenRegisteredBackendWithConfig("kubernetes", map[string]any{
 		internalGatewayIDConfigKey: "gateway-1",
-		"proxy_image":              "ghcr.io/cautem/proxy@sha256:" + strings.Repeat("a", 64),
-		"sandbox_runtime_image":    "ghcr.io/cautem/runtime@sha256:" + strings.Repeat("b", 64),
+		"proxy_image":              "ghcr.io/quarshell/proxy@sha256:" + strings.Repeat("a", 64),
+		"sandbox_runtime_image":    "ghcr.io/quarshell/runtime@sha256:" + strings.Repeat("b", 64),
 		"grpc_endpoint":            "gateway.example:7443",
 	})
 	if err != nil || !registered || backend == nil {

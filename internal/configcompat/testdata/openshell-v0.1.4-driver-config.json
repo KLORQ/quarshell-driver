@@ -93,7 +93,7 @@
       "runtime_or_parity_note": "ConfigFromMap maps this field into DefaultImage; local runtime effects and exact upstream defaults are tracked separately from this parser inventory.",
       "value_behavior": {
         "status": "partial",
-        "omitted": "Pinned Rust default is nvcr.io/nvidia/base/ubuntu:24.04; local ConfigFromMap leaves the value empty and the driver chooses a Cautem image.",
+        "omitted": "Pinned Rust default is nvcr.io/nvidia/base/ubuntu:24.04; local ConfigFromMap leaves the value empty and the driver chooses a Quarshell image.",
         "explicit_empty": "Rejected locally to prevent empty input from silently selecting the product image; upstream accepts the String shape and fails later when creating with the empty image.",
         "explicit_zero": "not-applicable",
         "runtime_effect": "The default image differs by design; an explicit non-empty image is passed to the workload image selection path.",
@@ -349,7 +349,7 @@
       "runtime_or_parity_note": "ConfigFromMap maps this field into SandboxSSHSocketPath; local runtime effects and exact upstream defaults are tracked separately from this parser inventory.",
       "value_behavior": {
         "status": "partial",
-        "omitted": "Upstream defaults to /run/openshell/ssh.sock; local runtime defaults to its Cautem guest SSH socket path.",
+        "omitted": "Upstream defaults to /run/openshell/ssh.sock; local runtime defaults to its Quarshell guest SSH socket path.",
         "explicit_empty": "Local rejects an empty path instead of silently selecting its product default; upstream accepts the empty String shape and the resulting guest SSH path is unusable.",
         "explicit_zero": "Wrong TOML type; rejected by both string decoders.",
         "runtime_effect": "The guest SSH socket path is shared with the relay and health/readiness checks; the path differs while the relay behavior is covered locally.",
@@ -378,7 +378,7 @@
       "runtime_or_parity_note": "ConfigFromMap maps this field into PidsLimit; local runtime effects and exact upstream defaults are tracked separately from this parser inventory.",
       "value_behavior": {
         "status": "partial",
-        "omitted": "Upstream and local runtime default to 2048. Local CAUTEM_SANDBOX_PIDS_LIMIT can override that default, including opting out with zero.",
+        "omitted": "Upstream and local runtime default to 2048. Local QUARSHELL_SANDBOX_PIDS_LIMIT can override that default, including opting out with zero.",
         "explicit_empty": "Wrong TOML type; rejected by the upstream typed decoder and local integer decoder.",
         "explicit_zero": "Rejected by both typed decoders because the field is NonZeroI64.",
         "runtime_effect": "Positive values set the Engine PIDs limit. The local environment override means omission is not invariant across deployments.",
@@ -702,7 +702,7 @@
       "runtime_or_parity_note": "ConfigFromMap maps this field into SocketPath; local runtime effects and exact upstream defaults are tracked separately from this parser inventory.",
       "value_behavior": {
         "status": "partial",
-        "omitted": "Both discover a responsive Podman socket; local discovery also honors Docker-compatible environment variables and Quarshell/Cautem candidate paths.",
+        "omitted": "Both discover a responsive Podman socket; local discovery also honors Docker-compatible environment variables and Quarshell/Quarshell candidate paths.",
         "explicit_empty": "Rejected locally. Upstream retains an explicitly empty PathBuf and attempts to use it instead of discovery.",
         "explicit_zero": "not-applicable",
         "runtime_effect": "Both connect to the selected Podman API socket; discovery order differs and needs host acceptance.",
@@ -728,7 +728,7 @@
       "runtime_or_parity_note": "ConfigFromMap maps this field into DefaultImage; local runtime effects and exact upstream defaults are tracked separately from this parser inventory.",
       "value_behavior": {
         "status": "partial",
-        "omitted": "Pinned Rust default is nvcr.io/nvidia/base/ubuntu:24.04; local ConfigFromMap leaves the value empty and the driver chooses a Cautem image.",
+        "omitted": "Pinned Rust default is nvcr.io/nvidia/base/ubuntu:24.04; local ConfigFromMap leaves the value empty and the driver chooses a Quarshell image.",
         "explicit_empty": "Rejected locally to prevent empty input from silently selecting the product image; upstream accepts the String shape and fails later when creating with the empty image.",
         "explicit_zero": "not-applicable",
         "runtime_effect": "The default image differs by design; an explicit non-empty image is passed to the workload image selection path.",
@@ -831,7 +831,7 @@
       "runtime_or_parity_note": "ConfigFromMap maps this field into SandboxSSHSocketPath; local runtime effects and exact upstream defaults are tracked separately from this parser inventory.",
       "value_behavior": {
         "status": "partial",
-        "omitted": "Upstream defaults to /run/openshell/ssh.sock; local runtime defaults to its Cautem guest SSH socket path.",
+        "omitted": "Upstream defaults to /run/openshell/ssh.sock; local runtime defaults to its Quarshell guest SSH socket path.",
         "explicit_empty": "Local rejects an empty path instead of silently selecting its product default; upstream accepts the empty String shape and the resulting guest SSH path is unusable.",
         "explicit_zero": "Wrong TOML type; rejected by both string decoders.",
         "runtime_effect": "The guest SSH socket path is shared with the relay and health/readiness checks; the path differs while the relay behavior is covered locally.",
@@ -860,7 +860,7 @@
       "runtime_or_parity_note": "ConfigFromMap maps this field into NetworkName; local runtime effects and exact upstream defaults are tracked separately from this parser inventory.",
       "value_behavior": {
         "status": "partial",
-        "omitted": "Upstream defaults to openshell; local Engine-backed resource naming uses its Cautem network prefix when this value is empty.",
+        "omitted": "Upstream defaults to openshell; local Engine-backed resource naming uses its Quarshell network prefix when this value is empty.",
         "explicit_empty": "Accepted locally and selects the local fallback; upstream stores an empty String and passes it into network creation.",
         "explicit_zero": "Wrong TOML type; rejected by both string decoders.",
         "runtime_effect": "Explicit non-empty values select the network prefix; default resource naming differs and remains a compatibility decision.",
@@ -1066,7 +1066,7 @@
       "runtime_or_parity_note": "ConfigFromMap maps this field into PidsLimit; local runtime effects and exact upstream defaults are tracked separately from this parser inventory.",
       "value_behavior": {
         "status": "partial",
-        "omitted": "Upstream and local runtime default to 2048. Local CAUTEM_SANDBOX_PIDS_LIMIT can override that default, including opting out with zero.",
+        "omitted": "Upstream and local runtime default to 2048. Local QUARSHELL_SANDBOX_PIDS_LIMIT can override that default, including opting out with zero.",
         "explicit_empty": "Wrong TOML type; rejected by the upstream typed decoder and local integer decoder.",
         "explicit_zero": "Rejected by both typed decoders because the field is NonZeroI64.",
         "runtime_effect": "Positive values set the native Libpod PIDs limit. The local environment override means omission is not invariant across deployments.",

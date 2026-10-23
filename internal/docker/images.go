@@ -26,7 +26,7 @@ func (d *Driver) ensureImage(ctx context.Context, ref string) error {
 		return fmt.Errorf("docker image %s is not available locally and image_pull_policy is never", ref)
 	}
 	low := strings.ToLower(ref)
-	if low == localSandboxImage || low == guiSandboxImage || low == gpuSandboxImage || low == guiGPUSandboxImage || strings.HasPrefix(low, "cautem-sandbox:") {
+	if low == localSandboxImage || low == guiSandboxImage || low == gpuSandboxImage || low == guiGPUSandboxImage || strings.HasPrefix(low, "quarshell-sandbox:") {
 		remote, published := defaults.PublishedImage(low)
 		var pullErr error
 		if published && !strings.EqualFold(os.Getenv(defaults.EnvImagePull), "never") {
@@ -118,15 +118,15 @@ func (d *Driver) defaultSandboxImage(ctx context.Context, displayMode string, gp
 		}
 		return gpuSandboxImage
 	}
-	// The generic Debian base lacks the sandbox account and cautem-init
+	// The generic Debian base lacks the sandbox account and quarshell-init
 	// required by the default hardening policy. Let ensureImage pull the
-	// published cautem base when it is not already available locally.
+	// published quarshell base when it is not already available locally.
 	return localSandboxImage
 }
 
 func usesEmbeddedInit(img string) bool {
 	img = strings.TrimSpace(strings.ToLower(img))
-	return img == localSandboxImage || img == guiSandboxImage || strings.HasPrefix(img, "cautem-sandbox:")
+	return img == localSandboxImage || img == guiSandboxImage || strings.HasPrefix(img, "quarshell-sandbox:")
 }
 
 func imageHasGUI(img string) bool {
@@ -146,6 +146,6 @@ func imageHasGUI(img string) bool {
 	if flavor == "gui" || flavor == "gui-gpu" {
 		return true
 	}
-	// Heuristic: inspect for cautem-gui-boot via missing path is hard; require known tags.
+	// Heuristic: inspect for quarshell-gui-boot via missing path is hard; require known tags.
 	return false
 }

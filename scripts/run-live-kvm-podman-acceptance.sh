@@ -3,14 +3,14 @@ set -eu
 unset GOROOT
 
 script_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
-build_dir=${CAUTEM_VM_BUILD_DIR:-"$(mktemp -d "${TMPDIR:-/tmp}/cautem-kvm-podman.XXXXXX")"}
+build_dir=${QUARSHELL_VM_BUILD_DIR:-"$(mktemp -d "${TMPDIR:-/tmp}/quarshell-kvm-podman.XXXXXX")"}
 made_build_dir=0
-if [ -z "${CAUTEM_VM_BUILD_DIR:-}" ]; then made_build_dir=1; fi
+if [ -z "${QUARSHELL_VM_BUILD_DIR:-}" ]; then made_build_dir=1; fi
 fixture_dir="$build_dir/nested-podman-fixture"
 mkdir -p "$build_dir"
 rm -rf "$fixture_dir"
 mkdir -m 700 "$fixture_dir"
-owner="cautem-vm-podman-$$"
+owner="quarshell-vm-podman-$$"
 container_id=
 bootstrap_container_id=
 status=0
@@ -39,10 +39,10 @@ docker info >/dev/null 2>&1 || { echo "Docker daemon is unavailable" >&2; exit 2
 lockfile="$script_dir/vm-engine-fixtures.lock.json"
 test_image=$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["test_image"])' "$lockfile")
 test_image_tag=docker.io/library/alpine:3.22
-image="localhost/cautem-podman6-vm-test:6.1.4"
-podman_test_name=${CAUTEM_VM_TEST_NAME:-TestLiveMicroVMNestedPodman}
-CAUTEM_PODMAN_FIXTURE_PLATFORM="linux/$host_arch" \
-CAUTEM_PODMAN_FIXTURE_DIGEST_FILE="$fixture_dir/podman6-fixture-image-id.txt" \
+image="localhost/quarshell-podman6-vm-test:6.1.4"
+podman_test_name=${QUARSHELL_VM_TEST_NAME:-TestLiveMicroVMNestedPodman}
+QUARSHELL_PODMAN_FIXTURE_PLATFORM="linux/$host_arch" \
+QUARSHELL_PODMAN_FIXTURE_DIGEST_FILE="$fixture_dir/podman6-fixture-image-id.txt" \
   "$script_dir/build-podman6-fixture.sh" "$image"
 docker pull --platform "linux/$host_arch" "$test_image"
 docker tag "$test_image" "$test_image_tag"
@@ -52,7 +52,7 @@ chmod 0644 "$fixture_dir/alpine-image.tar"
 # Keep the disposable VM bootstrap rootfs independent from the Podman distro
 # under test. The latter remains the workload rootfs and data-disk fixture.
 bootstrap_container_id=$(docker create --platform "linux/$host_arch" \
-  --label "cautem.vm-test.owner=$owner-bootstrap" --entrypoint /bin/sh "$test_image_tag" -c 'sleep 3600')
+  --label "quarshell.vm-test.owner=$owner-bootstrap" --entrypoint /bin/sh "$test_image_tag" -c 'sleep 3600')
 docker start "$bootstrap_container_id" >/dev/null
 docker export --output "$fixture_dir/bootstrap-rootfs.tar" "$bootstrap_container_id"
 docker rm -f "$bootstrap_container_id" >/dev/null
@@ -60,20 +60,20 @@ bootstrap_container_id=
 chmod 0644 "$fixture_dir/bootstrap-rootfs.tar"
 
 container_id=$(docker create --platform "linux/$host_arch" \
-  --label "cautem.vm-test.owner=$owner" --entrypoint /bin/sh "$image" -c 'sleep 3600')
+  --label "quarshell.vm-test.owner=$owner" --entrypoint /bin/sh "$image" -c 'sleep 3600')
 docker start "$container_id" >/dev/null
 docker exec "$container_id" useradd --uid 1000 --user-group --no-create-home sandbox
-docker exec "$container_id" mkdir -p /opt/cautem-test
-docker cp "$fixture_dir/alpine-image.tar" "$container_id:/opt/cautem-test/alpine-image.tar"
+docker exec "$container_id" mkdir -p /opt/quarshell-test
+docker cp "$fixture_dir/alpine-image.tar" "$container_id:/opt/quarshell-test/alpine-image.tar"
 docker stop "$container_id" >/dev/null
 docker export --output "$fixture_dir/podman-engine-rootfs.tar" "$container_id"
 docker rm "$container_id" >/dev/null
 container_id=
 chmod 0644 "$fixture_dir/podman-engine-rootfs.tar"
 
-CAUTEM_VM_BUILD_DIR=$build_dir \
-CAUTEM_VM_TEST_ROOTFS_TAR="$fixture_dir/podman-engine-rootfs.tar" \
-CAUTEM_VM_TEST_BOOTSTRAP_ROOTFS_TAR="$fixture_dir/bootstrap-rootfs.tar" \
-CAUTEM_VM_PODMAN_ACCEPTANCE=1 \
-CAUTEM_VM_TEST_NAME="$podman_test_name" \
+QUARSHELL_VM_BUILD_DIR=$build_dir \
+QUARSHELL_VM_TEST_ROOTFS_TAR="$fixture_dir/podman-engine-rootfs.tar" \
+QUARSHELL_VM_TEST_BOOTSTRAP_ROOTFS_TAR="$fixture_dir/bootstrap-rootfs.tar" \
+QUARSHELL_VM_PODMAN_ACCEPTANCE=1 \
+QUARSHELL_VM_TEST_NAME="$podman_test_name" \
 "$script_dir/run-live-kvm-acceptance.sh"

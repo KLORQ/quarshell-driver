@@ -18,17 +18,17 @@ import (
 )
 
 func TestPodmanNativeBlackholeRouteCreateInspectE2E(t *testing.T) {
-	if os.Getenv("CAUTEM_PODMAN_NATIVE_NETWORK_E2E") != "1" {
-		t.Skip("set CAUTEM_PODMAN_NATIVE_NETWORK_E2E=1 to probe native Podman blackhole route support")
+	if os.Getenv("QUARSHELL_PODMAN_NATIVE_NETWORK_E2E") != "1" {
+		t.Skip("set QUARSHELL_PODMAN_NATIVE_NETWORK_E2E=1 to probe native Podman blackhole route support")
 	}
-	if os.Getenv("CAUTEM_TESTCONTAINERS") != "1" {
-		t.Fatal("CAUTEM_PODMAN_NATIVE_NETWORK_E2E=1 requires CAUTEM_TESTCONTAINERS=1")
+	if os.Getenv("QUARSHELL_TESTCONTAINERS") != "1" {
+		t.Fatal("QUARSHELL_PODMAN_NATIVE_NETWORK_E2E=1 requires QUARSHELL_TESTCONTAINERS=1")
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Minute)
 	defer cancel()
-	image := os.Getenv("CAUTEM_TEST_PODMAN_IMAGE")
+	image := os.Getenv("QUARSHELL_TEST_PODMAN_IMAGE")
 	if image == "" {
-		t.Fatal("CAUTEM_TEST_PODMAN_IMAGE must point to the Podman 6.1.4 fixture")
+		t.Fatal("QUARSHELL_TEST_PODMAN_IMAGE must point to the Podman 6.1.4 fixture")
 	}
 	service, err := testcontainers.Run(ctx, image,
 		testcontainers.WithExposedPorts("18500/tcp"),
@@ -65,8 +65,8 @@ func TestPodmanNativeBlackholeRouteCreateInspectE2E(t *testing.T) {
 	}
 	endpoint := fmt.Sprintf("tcp://%s:%s", host, port.Port())
 	create, verify := nativeNetworkCallbacks(endpoint)
-	name := fmt.Sprintf("cautem-native-blackhole-%d", time.Now().UnixNano())
-	if err := create(ctx, name, true, map[string]string{"cautem.test.owner": name}); err != nil {
+	name := fmt.Sprintf("quarshell-native-blackhole-%d", time.Now().UnixNano())
+	if err := create(ctx, name, true, map[string]string{"quarshell.test.owner": name}); err != nil {
 		t.Fatalf("create native internal network with blackhole gateway route: %v", err)
 	}
 	t.Cleanup(func() {

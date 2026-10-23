@@ -30,13 +30,13 @@ if raw["schema_version"] != 1 or raw["vm_control_protocol"] != 2 or raw["host"] 
     fail("manifest version, VM control protocol, or platform does not match the requested build")
 
 expected_names = {
-    "cautem-vm-worker",
-    f"cautem-vm-umoci-linux-{expected_guest_arch}",
-    f"cautem-vm-guest-agent-linux-{expected_guest_arch}",
-    f"cautem-init-linux-{expected_guest_arch}",
-    f"cautem-supervisor-linux-{expected_guest_arch}",
-    f"cautem-sshd-linux-{expected_guest_arch}",
-    f"cautem-vm-security-probe-linux-{expected_guest_arch}",
+    "quarshell-vm-worker",
+    f"quarshell-vm-umoci-linux-{expected_guest_arch}",
+    f"quarshell-vm-guest-agent-linux-{expected_guest_arch}",
+    f"quarshell-init-linux-{expected_guest_arch}",
+    f"quarshell-supervisor-linux-{expected_guest_arch}",
+    f"quarshell-sshd-linux-{expected_guest_arch}",
+    f"quarshell-vm-security-probe-linux-{expected_guest_arch}",
 }
 records = raw["artifacts"]
 if not isinstance(records, list):

@@ -10,10 +10,10 @@ import (
 )
 
 const (
-	workspaceManagedByLabel    = "cautem.ai/managed-by"
-	workspaceGatewayHashLabel  = "cautem.ai/gateway-hash"
-	workspaceIdentityHashLabel = "cautem.ai/workspace-hash"
-	workspaceIsolationPolicy   = "cautem-default-deny"
+	workspaceManagedByLabel    = "quarshell.ai/managed-by"
+	workspaceGatewayHashLabel  = "quarshell.ai/gateway-hash"
+	workspaceIdentityHashLabel = "quarshell.ai/workspace-hash"
+	workspaceIsolationPolicy   = "quarshell-default-deny"
 )
 
 // workspaceNamespaceName returns a stable, non-identifying namespace for one
@@ -27,7 +27,7 @@ func workspaceNamespaceName(gatewayID, workspace string) (string, error) {
 		return "", fmt.Errorf("gateway and workspace identifiers must not contain surrounding whitespace")
 	}
 	identity := sha256.Sum256([]byte(gatewayID + "\x00" + workspace))
-	return "cautem-ws-" + hex.EncodeToString(identity[:16]), nil
+	return "quarshell-ws-" + hex.EncodeToString(identity[:16]), nil
 }
 
 func workspaceIdentityLabels(gatewayID, workspace string) (map[string]any, error) {
@@ -43,7 +43,7 @@ func workspaceIdentityLabels(gatewayID, workspace string) (map[string]any, error
 	}
 	workspaceHash := sha256.Sum256([]byte(workspace))
 	return map[string]any{
-		workspaceManagedByLabel:    "cautem",
+		workspaceManagedByLabel:    "quarshell",
 		workspaceGatewayHashLabel:  gatewayHash,
 		workspaceIdentityHashLabel: hex.EncodeToString(workspaceHash[:16]),
 	}, nil
@@ -68,7 +68,7 @@ func workspaceNamespaceSelector(gatewayID string) (string, error) {
 		return "", err
 	}
 	return labels.Set{
-		workspaceManagedByLabel:   "cautem",
+		workspaceManagedByLabel:   "quarshell",
 		workspaceGatewayHashLabel: hash,
 	}.AsSelector().String(), nil
 }
@@ -97,8 +97,8 @@ func renderWorkspaceIsolationResources(gatewayID, workspace string) (string, map
 			"name":      workspaceIsolationPolicy,
 			"namespace": namespace,
 			"labels": map[string]any{
-				workspaceManagedByLabel: "cautem",
-				"cautem.ai/component":   "workspace-default-deny",
+				workspaceManagedByLabel:  "quarshell",
+				"quarshell.ai/component": "workspace-default-deny",
 			},
 		},
 		"spec": map[string]any{

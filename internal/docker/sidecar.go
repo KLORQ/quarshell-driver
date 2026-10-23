@@ -39,13 +39,13 @@ func (d *Driver) createProxySidecar(ctx context.Context, name, netName, img, bin
 	ctrName := "quarshell-proxy-" + name
 
 	binds := []string{
-		binPath + ":/cautem/cautem:ro",
-		policyPath + ":/cautem/policy.yaml:ro",
+		binPath + ":/quarshell/quarshell:ro",
+		policyPath + ":/quarshell/policy.yaml:ro",
 	}
 	for _, entry := range []struct{ source, target string }{
-		{d.runtimeConfig.UpstreamProxyAuthFile, "/run/cautem/upstream-proxy/auth"},
-		{d.runtimeConfig.UpstreamProxyCABundle, "/run/cautem/upstream-proxy/ca.pem"},
-		{d.runtimeConfig.EgressCABundle, "/run/cautem/egress-ca/ca.pem"},
+		{d.runtimeConfig.UpstreamProxyAuthFile, "/run/quarshell/upstream-proxy/auth"},
+		{d.runtimeConfig.UpstreamProxyCABundle, "/run/quarshell/upstream-proxy/ca.pem"},
+		{d.runtimeConfig.EgressCABundle, "/run/quarshell/egress-ca/ca.pem"},
 	} {
 		if entry.source == "" {
 			continue
@@ -74,38 +74,38 @@ func (d *Driver) createProxySidecar(ctx context.Context, name, netName, img, bin
 			}
 		}
 		binds = append(binds,
-			d.runtimeConfig.GuestTLSCA+":/run/cautem/gateway-tls/ca.pem:ro",
-			d.runtimeConfig.GuestTLSCert+":/run/cautem/gateway-tls/cert.pem:ro",
-			d.runtimeConfig.GuestTLSKey+":/run/cautem/gateway-tls/key.pem:ro",
+			d.runtimeConfig.GuestTLSCA+":/run/quarshell/gateway-tls/ca.pem:ro",
+			d.runtimeConfig.GuestTLSCert+":/run/quarshell/gateway-tls/cert.pem:ro",
+			d.runtimeConfig.GuestTLSKey+":/run/quarshell/gateway-tls/key.pem:ro",
 		)
 	}
 	cmd := []string{
 		"proxy",
 		"--listen", fmt.Sprintf("0.0.0.0:%d", port),
-		"--policy", "/cautem/policy.yaml",
+		"--policy", "/quarshell/policy.yaml",
 	}
 	if caVol != "" {
-		binds = append(binds, caVol+":/cautem/ca:rw")
-		cmd = append(cmd, "--ca-out", "/cautem/ca/ca.pem")
+		binds = append(binds, caVol+":/quarshell/ca:rw")
+		cmd = append(cmd, "--ca-out", "/quarshell/ca/ca.pem")
 	}
 	env := append([]string{}, proxyEnv...)
 	env = mergeEnv(env, d.upstreamProxyEnv())
 	env = mergeEnv(env, d.egressTrustEnv())
 	if d.runtimeConfig.GuestTLSCA != "" {
 		env = mergeEnv(env, []string{
-			"CAUTEM_GUEST_TLS_CA=/run/cautem/gateway-tls/ca.pem",
-			"CAUTEM_GUEST_TLS_CERT=/run/cautem/gateway-tls/cert.pem",
-			"CAUTEM_GUEST_TLS_KEY=/run/cautem/gateway-tls/key.pem",
+			"QUARSHELL_GUEST_TLS_CA=/run/quarshell/gateway-tls/ca.pem",
+			"QUARSHELL_GUEST_TLS_CERT=/run/quarshell/gateway-tls/cert.pem",
+			"QUARSHELL_GUEST_TLS_KEY=/run/quarshell/gateway-tls/key.pem",
 		})
 	}
 	if d.runtimeConfig.ProviderSPIFFEWorkloadAPISocket != "" {
-		env = mergeEnv(env, []string{"CAUTEM_PROVIDER_SPIFFE_WORKLOAD_API_SOCKET=" + d.runtimeConfig.ProviderSPIFFEWorkloadAPISocket})
+		env = mergeEnv(env, []string{"QUARSHELL_PROVIDER_SPIFFE_WORKLOAD_API_SOCKET=" + d.runtimeConfig.ProviderSPIFFEWorkloadAPISocket})
 	}
 	if d.runtimeConfig.GatewayGRPCEndpoint != "" {
-		env = mergeEnv(env, []string{"CAUTEM_GATEWAY_GRPC_ENDPOINT=" + d.runtimeConfig.GatewayGRPCEndpoint})
+		env = mergeEnv(env, []string{"QUARSHELL_GATEWAY_GRPC_ENDPOINT=" + d.runtimeConfig.GatewayGRPCEndpoint})
 	}
 	if d.runtimeConfig.GatewayGRPCPort > 0 {
-		env = mergeEnv(env, []string{fmt.Sprintf("CAUTEM_GATEWAY_GRPC_PORT=%d", d.runtimeConfig.GatewayGRPCPort)})
+		env = mergeEnv(env, []string{fmt.Sprintf("QUARSHELL_GATEWAY_GRPC_PORT=%d", d.runtimeConfig.GatewayGRPCPort)})
 	}
 	if socketPath, err := providerWorkloadSocket(env); err != nil {
 		return fmt.Errorf("docker proxy SPIFFE socket: %w", err)
@@ -120,13 +120,13 @@ func (d *Driver) createProxySidecar(ctx context.Context, name, netName, img, bin
 		}
 		sshDir := filepath.Dir(sshSocket)
 		binds = append(binds, sshVol+":"+sshDir+":rw")
-		env = mergeEnv(env, []string{"CAUTEM_SSH_SOCKET=" + sshSocket, "CAUTEM_SANDBOX=" + name})
+		env = mergeEnv(env, []string{"QUARSHELL_SSH_SOCKET=" + sshSocket, "QUARSHELL_SANDBOX=" + name})
 		if strings.TrimSpace(d.runtimeConfig.GatewayGRPCEndpoint) != "" {
 			controlSocket := filepath.Join(sshDir, driver.SupervisorControlSocketName)
-			env = mergeEnv(env, []string{"CAUTEM_SUPERVISOR_CONTROL_SOCKET=" + controlSocket})
+			env = mergeEnv(env, []string{"QUARSHELL_SUPERVISOR_CONTROL_SOCKET=" + controlSocket})
 		}
 		if tcpDialSocket != "" {
-			env = mergeEnv(env, []string{"CAUTEM_TCP_DIAL_SOCKET=" + tcpDialSocket})
+			env = mergeEnv(env, []string{"QUARSHELL_TCP_DIAL_SOCKET=" + tcpDialSocket})
 		}
 	}
 
@@ -136,9 +136,9 @@ func (d *Driver) createProxySidecar(ctx context.Context, name, netName, img, bin
 	}
 	cfg := &container.Config{
 		Image: img,
-		// Agent images (cursor/claude) set ENTRYPOINT=/usr/local/bin/cautem-init — that must
+		// Agent images (cursor/claude) set ENTRYPOINT=/usr/local/bin/quarshell-init — that must
 		// NOT wrap the sidecar. Entrypoint is the mounted linux CLI; Cmd is proxy args.
-		Entrypoint: []string{"/cautem/cautem"},
+		Entrypoint: []string{"/quarshell/quarshell"},
 		Cmd:        cmd,
 		Env:        env,
 		Labels: map[string]string{
@@ -152,7 +152,7 @@ func (d *Driver) createProxySidecar(ctx context.Context, name, netName, img, bin
 			proxyPort: {},
 		},
 	}
-	// OpenShell-style: host.cautem.internal → host-gateway so the sidecar can
+	// OpenShell-style: host.quarshell.internal → host-gateway so the sidecar can
 	// ResolveSecrets from quarshell-gateway on the host (no runtime hostname fallback).
 	host := &container.HostConfig{
 		Binds:       binds,
@@ -246,7 +246,7 @@ func (d *Driver) waitProxyCA(ctx context.Context, proxyID string, timeout time.D
 	var lastErr error
 	for time.Now().Before(deadline) {
 		res, err := d.Exec(ctx, core.ID(proxyID), driver.ExecRequest{
-			Argv: []string{"test", "-s", "/cautem/ca/ca.pem"},
+			Argv: []string{"test", "-s", "/quarshell/ca/ca.pem"},
 		})
 		if err == nil && res.ExitCode == 0 {
 			return nil
@@ -266,9 +266,9 @@ func (d *Driver) waitProxyCA(ctx context.Context, proxyID string, timeout time.D
 	}
 	detail := strings.TrimSpace(buf.String())
 	if detail != "" {
-		return fmt.Errorf("docker proxy: timed out waiting for /cautem/ca/ca.pem (last exec: %v)\nproxy logs:\n%s", lastErr, detail)
+		return fmt.Errorf("docker proxy: timed out waiting for /quarshell/ca/ca.pem (last exec: %v)\nproxy logs:\n%s", lastErr, detail)
 	}
-	return fmt.Errorf("docker proxy: timed out waiting for /cautem/ca/ca.pem (last exec: %v)", lastErr)
+	return fmt.Errorf("docker proxy: timed out waiting for /quarshell/ca/ca.pem (last exec: %v)", lastErr)
 }
 
 // waitProxyListening waits until the sidecar accepts TCP on 127.0.0.1:port.

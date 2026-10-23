@@ -79,10 +79,10 @@ func (d *Driver) ValidateCreate(ctx context.Context, request driver.BackendCreat
 	if (parsedGatewayURL.Scheme == "https") != (guestTLS != nil) {
 		return fmt.Errorf("kubernetes guest TLS files must be configured exactly when the Gateway endpoint uses HTTPS")
 	}
-	if err := requireProxyEnvironmentValue(input.ProxyEnv, "CAUTEM_GATEWAY_URL", gatewayURL); err != nil {
+	if err := requireProxyEnvironmentValue(input.ProxyEnv, "QUARSHELL_GATEWAY_URL", gatewayURL); err != nil {
 		return err
 	}
-	if err := requireProxyEnvironmentValue(input.ProxyEnv, "CAUTEM_SANDBOX", input.Name); err != nil {
+	if err := requireProxyEnvironmentValue(input.ProxyEnv, "QUARSHELL_SANDBOX", input.Name); err != nil {
 		return err
 	}
 	return nil

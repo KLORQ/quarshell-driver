@@ -27,11 +27,11 @@ func lifecycleFixtureDriver(t *testing.T, handler http.HandlerFunc) *Driver {
 }
 
 func sandboxInspectFixture(state string) string {
-	return "{\"Id\":\"sandbox-id\",\"Name\":\"/cautem-fixture\",\"Config\":{\"Labels\":{\"cautem.sandbox\":\"1\",\"cautem.name\":\"fixture\",\"cautem.role\":\"sandbox\",\"cautem.network\":\"cautem-net-fixture\",\"cautem.ca_volume\":\"cautem-ca-fixture\",\"cautem.ssh_volume\":\"cautem-ssh-fixture\",\"cautem.internal/workspace\":\"default\",\"cautem.internal/driver-config-used\":\"false\",\"cautem.internal/driver-config-unlabelable\":\"false\",\"cautem.internal/resource-admission-identities\":\"{}\"}},\"State\":{\"Status\":\"" + state + "\"}}"
+	return "{\"Id\":\"sandbox-id\",\"Name\":\"/quarshell-fixture\",\"Config\":{\"Labels\":{\"quarshell.sandbox\":\"1\",\"quarshell.name\":\"fixture\",\"quarshell.role\":\"sandbox\",\"quarshell.network\":\"quarshell-net-fixture\",\"quarshell.ca_volume\":\"quarshell-ca-fixture\",\"quarshell.ssh_volume\":\"quarshell-ssh-fixture\",\"quarshell.internal/workspace\":\"default\",\"quarshell.internal/driver-config-used\":\"false\",\"quarshell.internal/driver-config-unlabelable\":\"false\",\"quarshell.internal/resource-admission-identities\":\"{}\"}},\"State\":{\"Status\":\"" + state + "\"}}"
 }
 
 func proxyInspectFixture(state string) string {
-	return "{\"Id\":\"proxy-id\",\"Name\":\"/quarshell-proxy-fixture\",\"Config\":{\"Labels\":{\"cautem.sandbox\":\"1\",\"cautem.name\":\"fixture\",\"cautem.network\":\"cautem-net-fixture\",\"cautem.role\":\"proxy\"},\"ExposedPorts\":{\"3128/tcp\":{}}},\"State\":{\"Status\":\"" + state + "\"}}"
+	return "{\"Id\":\"proxy-id\",\"Name\":\"/quarshell-proxy-fixture\",\"Config\":{\"Labels\":{\"quarshell.sandbox\":\"1\",\"quarshell.name\":\"fixture\",\"quarshell.network\":\"quarshell-net-fixture\",\"quarshell.role\":\"proxy\"},\"ExposedPorts\":{\"3128/tcp\":{}}},\"State\":{\"Status\":\"" + state + "\"}}"
 }
 
 func TestStopStopsProxySidecarAndWorkload(t *testing.T) {
@@ -182,11 +182,11 @@ func TestDeleteReturnsContainerRemovalFailure(t *testing.T) {
 			w.WriteHeader(http.StatusNoContent)
 		case strings.HasSuffix(r.URL.Path, "/containers/sandbox-id") && r.Method == http.MethodDelete:
 			http.Error(w, "daemon refused removal", http.StatusInternalServerError)
-		case strings.HasSuffix(r.URL.Path, "/networks/cautem-net-fixture") && r.Method == http.MethodDelete:
+		case strings.HasSuffix(r.URL.Path, "/networks/quarshell-net-fixture") && r.Method == http.MethodDelete:
 			w.WriteHeader(http.StatusNoContent)
-		case strings.HasSuffix(r.URL.Path, "/volumes/cautem-ca-fixture") && r.Method == http.MethodDelete:
+		case strings.HasSuffix(r.URL.Path, "/volumes/quarshell-ca-fixture") && r.Method == http.MethodDelete:
 			w.WriteHeader(http.StatusNoContent)
-		case strings.HasSuffix(r.URL.Path, "/volumes/cautem-ssh-fixture") && r.Method == http.MethodDelete:
+		case strings.HasSuffix(r.URL.Path, "/volumes/quarshell-ssh-fixture") && r.Method == http.MethodDelete:
 			w.WriteHeader(http.StatusNoContent)
 		default:
 			t.Errorf("unexpected Engine request: %s %s", r.Method, r.URL)
@@ -219,23 +219,23 @@ func TestDeleteRetriesCleanupAfterWorkloadWasRemoved(t *testing.T) {
 		case strings.HasSuffix(r.URL.Path, "/containers/sandbox-id") && r.Method == http.MethodDelete:
 			workloadPresent = false
 			w.WriteHeader(http.StatusNoContent)
-		case strings.HasSuffix(r.URL.Path, "/networks/cautem-net-fixture") && r.Method == http.MethodGet:
+		case strings.HasSuffix(r.URL.Path, "/networks/quarshell-net-fixture") && r.Method == http.MethodGet:
 			if !networkPresent {
 				http.NotFound(w, r)
 				return
 			}
-			_, _ = io.WriteString(w, `{"Name":"cautem-net-fixture","Internal":true,"Labels":{"cautem.sandbox":"1","cautem.name":"fixture","cautem.role":"network"}}`)
-		case strings.HasSuffix(r.URL.Path, "/networks/cautem-net-fixture") && r.Method == http.MethodDelete:
+			_, _ = io.WriteString(w, `{"Name":"quarshell-net-fixture","Internal":true,"Labels":{"quarshell.sandbox":"1","quarshell.name":"fixture","quarshell.role":"network"}}`)
+		case strings.HasSuffix(r.URL.Path, "/networks/quarshell-net-fixture") && r.Method == http.MethodDelete:
 			networkRemoveAttempts++
 			networkPresent = false
 			w.WriteHeader(http.StatusNoContent)
-		case strings.HasSuffix(r.URL.Path, "/volumes/cautem-data-fixture") && r.Method == http.MethodGet:
+		case strings.HasSuffix(r.URL.Path, "/volumes/quarshell-data-fixture") && r.Method == http.MethodGet:
 			if !dataVolumePresent {
 				http.NotFound(w, r)
 				return
 			}
-			_, _ = io.WriteString(w, volumeInspectFixture("cautem-data-fixture", roleVolumeData))
-		case strings.HasSuffix(r.URL.Path, "/volumes/cautem-data-fixture") && r.Method == http.MethodDelete:
+			_, _ = io.WriteString(w, volumeInspectFixture("quarshell-data-fixture", roleVolumeData))
+		case strings.HasSuffix(r.URL.Path, "/volumes/quarshell-data-fixture") && r.Method == http.MethodDelete:
 			dataVolumeRemoveAttempts++
 			if dataVolumeRemoveAttempts == 1 {
 				http.Error(w, "volume temporarily busy", http.StatusInternalServerError)
@@ -243,8 +243,8 @@ func TestDeleteRetriesCleanupAfterWorkloadWasRemoved(t *testing.T) {
 			}
 			dataVolumePresent = false
 			w.WriteHeader(http.StatusNoContent)
-		case strings.HasSuffix(r.URL.Path, "/volumes/cautem-ca-fixture") && r.Method == http.MethodGet,
-			strings.HasSuffix(r.URL.Path, "/volumes/cautem-ssh-fixture") && r.Method == http.MethodGet:
+		case strings.HasSuffix(r.URL.Path, "/volumes/quarshell-ca-fixture") && r.Method == http.MethodGet,
+			strings.HasSuffix(r.URL.Path, "/volumes/quarshell-ssh-fixture") && r.Method == http.MethodGet:
 			http.NotFound(w, r)
 		default:
 			t.Errorf("unexpected Engine request: %s %s", r.Method, r.URL)
@@ -276,18 +276,18 @@ func TestEnsureVolumeRejectsForeignVolume(t *testing.T) {
 	var createRequests int
 	d := lifecycleFixtureDriver(t, func(w http.ResponseWriter, r *http.Request) {
 		switch {
-		case strings.HasSuffix(r.URL.Path, "/volumes/cautem-data-fixture") && r.Method == http.MethodGet:
-			_, _ = io.WriteString(w, `{"Name":"cautem-data-fixture","Labels":{"owner":"another-sandbox"}}`)
+		case strings.HasSuffix(r.URL.Path, "/volumes/quarshell-data-fixture") && r.Method == http.MethodGet:
+			_, _ = io.WriteString(w, `{"Name":"quarshell-data-fixture","Labels":{"owner":"another-sandbox"}}`)
 		case strings.HasSuffix(r.URL.Path, "/volumes/create"):
 			createRequests++
 			w.WriteHeader(http.StatusCreated)
-			_, _ = io.WriteString(w, `{"Name":"cautem-data-fixture"}`)
+			_, _ = io.WriteString(w, `{"Name":"quarshell-data-fixture"}`)
 		default:
 			t.Errorf("unexpected Engine request: %s %s", r.Method, r.URL)
 			http.NotFound(w, r)
 		}
 	})
-	if _, err := d.ensureVolume(context.Background(), "cautem-data-fixture", "fixture", roleVolumeData); err == nil {
+	if _, err := d.ensureVolume(context.Background(), "quarshell-data-fixture", "fixture", roleVolumeData); err == nil {
 		t.Fatal("ensureVolume accepted a foreign volume")
 	}
 	if createRequests != 0 {
@@ -308,9 +308,9 @@ func TestDeleteRefusesToRemoveForeignVolume(t *testing.T) {
 	var deleteRequests int
 	d := lifecycleFixtureDriver(t, func(w http.ResponseWriter, r *http.Request) {
 		switch {
-		case strings.HasSuffix(r.URL.Path, "/volumes/cautem-data-fixture") && r.Method == http.MethodGet:
-			_, _ = io.WriteString(w, `{"Name":"cautem-data-fixture","Labels":{"owner":"foreign"}}`)
-		case strings.HasSuffix(r.URL.Path, "/volumes/cautem-data-fixture") && r.Method == http.MethodDelete:
+		case strings.HasSuffix(r.URL.Path, "/volumes/quarshell-data-fixture") && r.Method == http.MethodGet:
+			_, _ = io.WriteString(w, `{"Name":"quarshell-data-fixture","Labels":{"owner":"foreign"}}`)
+		case strings.HasSuffix(r.URL.Path, "/volumes/quarshell-data-fixture") && r.Method == http.MethodDelete:
 			deleteRequests++
 			w.WriteHeader(http.StatusNoContent)
 		default:
@@ -318,7 +318,7 @@ func TestDeleteRefusesToRemoveForeignVolume(t *testing.T) {
 			http.NotFound(w, r)
 		}
 	})
-	err := d.removeManagedVolume(context.Background(), cleanupManifest{SandboxName: "fixture"}, "cautem-data-fixture", roleVolumeData)
+	err := d.removeManagedVolume(context.Background(), cleanupManifest{SandboxName: "fixture"}, "quarshell-data-fixture", roleVolumeData)
 	if err == nil {
 		t.Fatal("cleanup accepted a foreign volume")
 	}
@@ -328,9 +328,9 @@ func TestDeleteRefusesToRemoveForeignVolume(t *testing.T) {
 }
 
 func sandboxInspectWithDataVolumeFixture(state string) string {
-	return strings.Replace(sandboxInspectFixture(state), `"cautem.ca_volume":"cautem-ca-fixture"`, `"cautem.volume":"cautem-data-fixture","cautem.ca_volume":"cautem-ca-fixture"`, 1)
+	return strings.Replace(sandboxInspectFixture(state), `"quarshell.ca_volume":"quarshell-ca-fixture"`, `"quarshell.volume":"quarshell-data-fixture","quarshell.ca_volume":"quarshell-ca-fixture"`, 1)
 }
 
 func volumeInspectFixture(name, role string) string {
-	return `{"Name":"` + name + `","Labels":{"cautem.sandbox":"1","cautem.name":"fixture","cautem.role":"` + role + `","cautem.volume":"1"}}`
+	return `{"Name":"` + name + `","Labels":{"quarshell.sandbox":"1","quarshell.name":"fixture","quarshell.role":"` + role + `","quarshell.volume":"1"}}`
 }

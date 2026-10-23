@@ -47,7 +47,7 @@ func (d *Driver) OpenExecTerminal(ctx context.Context, id core.ID, request drive
 		workdir = mounts.WorkdirInContainer
 	}
 	if info.Container.Config.Labels[labelInit] == "1" {
-		argv = append([]string{"/cautem/cautem-init", "--"}, argv...)
+		argv = append([]string{"/quarshell/quarshell-init", "--"}, argv...)
 	}
 	if info.Container.Config.Labels[labelRole] == roleProxy {
 		workdir = "/"

@@ -13,23 +13,23 @@ import (
 	"github.com/KLORQ/quarshell-core/defaults"
 )
 
-// EnsureLinuxCLI builds (if needed) a linux/$GOARCH cautem binary for mounting into the proxy sidecar.
+// EnsureLinuxCLI builds (if needed) a linux/$GOARCH quarshell binary for mounting into the proxy sidecar.
 // Host darwin/windows binaries cannot run inside Linux containers (Docker Desktop).
-// Rebuild when missing, CAUTEM_REBUILD_CLI=1, or go.mod newer than the cached binary.
+// Rebuild when missing, QUARSHELL_REBUILD_CLI=1, or go.mod newer than the cached binary.
 func EnsureLinuxCLI(ctx context.Context, moduleDir string) (string, error) {
 	cacheDir, err := os.UserCacheDir()
 	if err != nil {
 		return "", err
 	}
 	arch := runtime.GOARCH
-	out := filepath.Join(cacheDir, "cautem", "cautem-linux-"+arch)
+	out := filepath.Join(cacheDir, "quarshell", "quarshell-linux-"+arch)
 	if !needsLinuxRebuild(out, moduleDir) {
 		return out, nil
 	}
 	if err := os.MkdirAll(filepath.Dir(out), 0o755); err != nil {
 		return "", err
 	}
-	cmd := exec.CommandContext(ctx, "go", "build", "-o", out, "./cmd/cautem")
+	cmd := exec.CommandContext(ctx, "go", "build", "-o", out, "./cmd/quarshell")
 	cmd.Dir = moduleDir
 	cmd.Env = append(os.Environ(),
 		"GOOS=linux",
@@ -38,13 +38,13 @@ func EnsureLinuxCLI(ctx context.Context, moduleDir string) (string, error) {
 	)
 	b, err := cmd.CombinedOutput()
 	if err != nil {
-		return "", fmt.Errorf("sidecar: cross-compile linux cautem: %w\n%s", err, strings.TrimSpace(string(b)))
+		return "", fmt.Errorf("sidecar: cross-compile linux quarshell: %w\n%s", err, strings.TrimSpace(string(b)))
 	}
 	return out, nil
 }
 
 func needsLinuxRebuild(out, moduleDir string) bool {
-	if os.Getenv("CAUTEM_REBUILD_CLI") == "1" || os.Getenv("CAUTEM_REBUILD_INIT") == "1" {
+	if os.Getenv("QUARSHELL_REBUILD_CLI") == "1" || os.Getenv("QUARSHELL_REBUILD_INIT") == "1" {
 		return true
 	}
 	st, err := os.Stat(out)
@@ -88,21 +88,21 @@ func needsLinuxRebuild(out, moduleDir string) bool {
 	return newer || walkErr != nil
 }
 
-// EnsureLinuxInit builds (if needed) a linux/$GOARCH cautem-init for guest harden.
+// EnsureLinuxInit builds (if needed) a linux/$GOARCH quarshell-init for guest harden.
 func EnsureLinuxInit(ctx context.Context, runtimeModuleDir string) (string, error) {
 	cacheDir, err := os.UserCacheDir()
 	if err != nil {
 		return "", err
 	}
 	arch := runtime.GOARCH
-	out := filepath.Join(cacheDir, "cautem", "cautem-init-linux-"+arch)
+	out := filepath.Join(cacheDir, "quarshell", "quarshell-init-linux-"+arch)
 	if !needsLinuxRebuild(out, runtimeModuleDir) {
 		return out, nil
 	}
 	if err := os.MkdirAll(filepath.Dir(out), 0o755); err != nil {
 		return "", err
 	}
-	cmd := exec.CommandContext(ctx, "go", "build", "-o", out, "./cmd/cautem-init")
+	cmd := exec.CommandContext(ctx, "go", "build", "-o", out, "./cmd/quarshell-init")
 	cmd.Dir = runtimeModuleDir
 	cmd.Env = append(os.Environ(),
 		"GOOS=linux",
@@ -111,7 +111,7 @@ func EnsureLinuxInit(ctx context.Context, runtimeModuleDir string) (string, erro
 	)
 	b, err := cmd.CombinedOutput()
 	if err != nil {
-		return "", fmt.Errorf("sidecar: cross-compile linux cautem-init: %w\n%s", err, strings.TrimSpace(string(b)))
+		return "", fmt.Errorf("sidecar: cross-compile linux quarshell-init: %w\n%s", err, strings.TrimSpace(string(b)))
 	}
 	if err := os.Chmod(out, 0o755); err != nil {
 		return "", fmt.Errorf("sidecar: make binary executable: %w", err)
@@ -119,14 +119,14 @@ func EnsureLinuxInit(ctx context.Context, runtimeModuleDir string) (string, erro
 	return out, nil
 }
 
-// EnsureLinuxSSHD builds linux cautem-sshd for guest SSH connect.
+// EnsureLinuxSSHD builds linux quarshell-sshd for guest SSH connect.
 func EnsureLinuxSSHD(ctx context.Context, runtimeModuleDir string) (string, error) {
-	return ensureLinuxCmd(ctx, runtimeModuleDir, "cautem-sshd", "./cmd/cautem-sshd")
+	return ensureLinuxCmd(ctx, runtimeModuleDir, "quarshell-sshd", "./cmd/quarshell-sshd")
 }
 
 // EnsureLinuxSupervisor builds the Linux PID 1 workload supervisor.
 func EnsureLinuxSupervisor(ctx context.Context, runtimeModuleDir string) (string, error) {
-	return ensureLinuxCmd(ctx, runtimeModuleDir, "cautem-supervisor", "./cmd/cautem-supervisor")
+	return ensureLinuxCmd(ctx, runtimeModuleDir, "quarshell-supervisor", "./cmd/quarshell-supervisor")
 }
 
 func ensureLinuxCmd(ctx context.Context, runtimeModuleDir, name, pkg string) (string, error) {
@@ -135,7 +135,7 @@ func ensureLinuxCmd(ctx context.Context, runtimeModuleDir, name, pkg string) (st
 		return "", err
 	}
 	arch := runtime.GOARCH
-	out := filepath.Join(cacheDir, "cautem", name+"-linux-"+arch)
+	out := filepath.Join(cacheDir, "quarshell", name+"-linux-"+arch)
 	if !needsLinuxRebuild(out, runtimeModuleDir) {
 		return out, nil
 	}

@@ -26,8 +26,8 @@ const AlpineImage = "public.ecr.aws/docker/library/alpine:3.22"
 // without Docker or Podman.
 func RequireContainers(t *testing.T) context.Context {
 	t.Helper()
-	if testing.Short() || getenv("CAUTEM_TESTCONTAINERS") != "1" {
-		t.Skip("set CAUTEM_TESTCONTAINERS=1 to run container-backed tests")
+	if testing.Short() || getenv("QUARSHELL_TESTCONTAINERS") != "1" {
+		t.Skip("set QUARSHELL_TESTCONTAINERS=1 to run container-backed tests")
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), containerTimeout)
 	t.Cleanup(cancel)
@@ -37,8 +37,8 @@ func RequireContainers(t *testing.T) context.Context {
 func RunAlpine(ctx context.Context, t *testing.T) testcontainers.Container {
 	t.Helper()
 	container, err := testcontainers.Run(ctx, AlpineImage,
-		testcontainers.WithCmd("sh", "-c", "echo cautem-testcontainers-ready"),
-		testcontainers.WithWaitStrategy(wait.ForLog("cautem-testcontainers-ready")),
+		testcontainers.WithCmd("sh", "-c", "echo quarshell-testcontainers-ready"),
+		testcontainers.WithWaitStrategy(wait.ForLog("quarshell-testcontainers-ready")),
 	)
 	if err != nil {
 		t.Fatalf("start test container: %v", err)
@@ -106,7 +106,7 @@ func RunPodmanDaemon(ctx context.Context, t *testing.T) (testcontainers.Containe
 	if err != nil {
 		t.Fatalf("resolve Podman fixture workspace: %v", err)
 	}
-	image := strings.TrimSpace(os.Getenv("CAUTEM_TEST_PODMAN_IMAGE"))
+	image := strings.TrimSpace(os.Getenv("QUARSHELL_TEST_PODMAN_IMAGE"))
 	if image == "" {
 		image = "quay.io/podman/stable:v5.8.7"
 	}

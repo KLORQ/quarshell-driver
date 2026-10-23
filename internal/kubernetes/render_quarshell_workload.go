@@ -12,16 +12,16 @@ import (
 )
 
 const (
-	cautemWorkloadRuntimeDir     = "/cautem/runtime"
-	cautemWorkloadPrivateDir     = "/cautem/private"
-	cautemWorkloadRunDir         = "/run/cautem"
-	cautemWorkloadBoundaryPort   = int64(5500)
-	cautemWorkloadRuntimeInit    = "quarshell-runtime-install"
-	cautemWorkloadSSHDName       = "cautem-sshd"
-	cautemWorkloadCredentialName = "cautem-private"
+	quarshellWorkloadRuntimeDir     = "/quarshell/runtime"
+	quarshellWorkloadPrivateDir     = "/quarshell/private"
+	quarshellWorkloadRunDir         = "/run/quarshell"
+	quarshellWorkloadBoundaryPort   = int64(5500)
+	quarshellWorkloadRuntimeInit    = "quarshell-runtime-install"
+	quarshellWorkloadSSHDName       = "quarshell-sshd"
+	quarshellWorkloadCredentialName = "quarshell-private"
 )
 
-type cautemWorkloadRenderParams struct {
+type quarshellWorkloadRenderParams struct {
 	Base          agentSandboxRenderParams
 	Command       []string
 	Env           []string
@@ -29,11 +29,11 @@ type cautemWorkloadRenderParams struct {
 	BoundaryPort  int64
 }
 
-// renderCautemAgentSandboxResource renders the untrusted workload Pod template
-// with Cautem PID 1, per-generation mTLS credentials, a private proxy route,
+// renderQuarshellAgentSandboxResource renders the untrusted workload Pod template
+// with Quarshell PID 1, per-generation mTLS credentials, a private proxy route,
 // and helper binaries copied from the digest-pinned trusted runtime image.
-func renderCautemAgentSandboxResource(config SandboxDriverConfig, input cautemWorkloadRenderParams) (map[string]any, error) {
-	params, err := validateCautemWorkloadRenderParams(input)
+func renderQuarshellAgentSandboxResource(config SandboxDriverConfig, input quarshellWorkloadRenderParams) (map[string]any, error) {
+	params, err := validateQuarshellWorkloadRenderParams(input)
 	if err != nil {
 		return nil, err
 	}
@@ -47,7 +47,7 @@ func renderCautemAgentSandboxResource(config SandboxDriverConfig, input cautemWo
 	if err != nil {
 		return nil, err
 	}
-	podTemplate, err := renderCautemWorkloadPodTemplate(config, params)
+	podTemplate, err := renderQuarshellWorkloadPodTemplate(config, params)
 	if err != nil {
 		return nil, err
 	}
@@ -70,7 +70,7 @@ func renderCautemAgentSandboxResource(config SandboxDriverConfig, input cautemWo
 		},
 		"spec": map[string]any{"podTemplate": podTemplate},
 	}
-	if cautemWorkloadUsesDefaultWorkspace(config) {
+	if quarshellWorkloadUsesDefaultWorkspace(config) {
 		claimSpec := map[string]any{
 			"accessModes": []any{"ReadWriteOnce"},
 			"resources":   map[string]any{"requests": map[string]any{"storage": params.Base.WorkspaceStorageSize}},
@@ -92,7 +92,7 @@ func renderCautemAgentSandboxResource(config SandboxDriverConfig, input cautemWo
 	return resource, nil
 }
 
-func renderCautemWorkloadPodTemplate(config SandboxDriverConfig, params cautemWorkloadRenderParams) (map[string]any, error) {
+func renderQuarshellWorkloadPodTemplate(config SandboxDriverConfig, params quarshellWorkloadRenderParams) (map[string]any, error) {
 	fragment, err := renderDriverConfigFragment(config)
 	if err != nil {
 		return nil, err
@@ -101,7 +101,7 @@ func renderCautemWorkloadPodTemplate(config SandboxDriverConfig, params cautemWo
 	fragmentContainer := fragmentSpec["containers"].([]any)[0].(map[string]any)
 	userMounts := fragmentContainer["volumeMounts"].([]any)
 	userVolumes := fragmentSpec["volumes"].([]any)
-	env, err := cautemWorkloadEnvironment(params)
+	env, err := quarshellWorkloadEnvironment(params)
 	if err != nil {
 		return nil, err
 	}
@@ -110,14 +110,14 @@ func renderCautemWorkloadPodTemplate(config SandboxDriverConfig, params cautemWo
 		command = []string{"sleep", "infinity"}
 	}
 	workloadCommand := []any{
-		"--", cautemWorkloadRuntimeDir + "/cautem-init", "--policy", cautemWorkloadPrivateDir + "/policy.yaml", "--",
+		"--", quarshellWorkloadRuntimeDir + "/quarshell-init", "--policy", quarshellWorkloadPrivateDir + "/policy.yaml", "--",
 	}
 	for _, arg := range command {
 		workloadCommand = append(workloadCommand, arg)
 	}
 	container := map[string]any{
 		"name": "agent", "image": params.Base.Image,
-		"command":    []any{cautemWorkloadRuntimeDir + "/cautem-supervisor"},
+		"command":    []any{quarshellWorkloadRuntimeDir + "/quarshell-supervisor"},
 		"args":       workloadCommand,
 		"workingDir": "/workspace",
 		"env":        env,
@@ -130,9 +130,9 @@ func renderCautemWorkloadPodTemplate(config SandboxDriverConfig, params cautemWo
 			"capabilities": map[string]any{"drop": []any{"ALL"}},
 		},
 		"volumeMounts": append(append([]any{}, userMounts...), []any{
-			map[string]any{"name": "quarshell-runtime", "mountPath": cautemWorkloadRuntimeDir, "readOnly": true},
-			map[string]any{"name": cautemWorkloadCredentialName, "mountPath": cautemWorkloadPrivateDir, "readOnly": true},
-			map[string]any{"name": "cautem-run", "mountPath": cautemWorkloadRunDir},
+			map[string]any{"name": "quarshell-runtime", "mountPath": quarshellWorkloadRuntimeDir, "readOnly": true},
+			map[string]any{"name": quarshellWorkloadCredentialName, "mountPath": quarshellWorkloadPrivateDir, "readOnly": true},
+			map[string]any{"name": "quarshell-run", "mountPath": quarshellWorkloadRunDir},
 		}...),
 	}
 	if params.Base.ImagePullPolicy != "" {
@@ -141,34 +141,34 @@ func renderCautemWorkloadPodTemplate(config SandboxDriverConfig, params cautemWo
 	if resources, ok := fragmentContainer["resources"]; ok {
 		container["resources"] = resources
 	}
-	if cautemWorkloadUsesDefaultWorkspace(config) {
+	if quarshellWorkloadUsesDefaultWorkspace(config) {
 		container["volumeMounts"] = append(container["volumeMounts"].([]any), map[string]any{
 			"name": workspaceVolumeName, "mountPath": "/workspace",
 		})
 	}
-	sshd := cautemWorkloadSSHDContainer(config, params)
+	sshd := quarshellWorkloadSSHDContainer(config, params)
 	// The init image is trusted and digest-pinned. It only stages static helper
 	// files into an in-memory volume; it never mounts the workload credentials.
 	helperInstall := map[string]any{
-		"name": cautemWorkloadRuntimeInit, "image": params.Base.SandboxRuntimeImage,
+		"name": quarshellWorkloadRuntimeInit, "image": params.Base.SandboxRuntimeImage,
 		"command": []any{"/bin/sh", "-ceu"},
 		"args": []any{strings.Join([]string{
-			"install -m 0555 /usr/local/bin/cautem-init " + cautemWorkloadRuntimeDir + "/cautem-init",
-			"install -m 0555 /usr/local/bin/cautem-supervisor " + cautemWorkloadRuntimeDir + "/cautem-supervisor",
-			"install -m 0555 /usr/local/bin/cautem-sshd " + cautemWorkloadRuntimeDir + "/cautem-sshd",
+			"install -m 0555 /usr/local/bin/quarshell-init " + quarshellWorkloadRuntimeDir + "/quarshell-init",
+			"install -m 0555 /usr/local/bin/quarshell-supervisor " + quarshellWorkloadRuntimeDir + "/quarshell-supervisor",
+			"install -m 0555 /usr/local/bin/quarshell-sshd " + quarshellWorkloadRuntimeDir + "/quarshell-sshd",
 		}, " && ")},
 		"securityContext": map[string]any{
 			"runAsUser": params.Base.SandboxUID, "runAsGroup": params.Base.SandboxGID,
 			"runAsNonRoot": true, "readOnlyRootFilesystem": true,
 			"allowPrivilegeEscalation": false, "capabilities": map[string]any{"drop": []any{"ALL"}},
 		},
-		"volumeMounts": []any{map[string]any{"name": "quarshell-runtime", "mountPath": cautemWorkloadRuntimeDir}},
+		"volumeMounts": []any{map[string]any{"name": "quarshell-runtime", "mountPath": quarshellWorkloadRuntimeDir}},
 	}
 	if params.Base.SandboxRuntimeImagePullPolicy != "" {
 		helperInstall["imagePullPolicy"] = params.Base.SandboxRuntimeImagePullPolicy
 	}
 	initContainers := []any{helperInstall}
-	if cautemWorkloadUsesDefaultWorkspace(config) {
+	if quarshellWorkloadUsesDefaultWorkspace(config) {
 		initContainers = append(initContainers, map[string]any{
 			"name": workspaceSeedContainerName, "image": params.Base.SandboxRuntimeImage,
 			"command": []any{"/bin/sh", "-ceu"}, "args": []any{"mkdir -p /workspace"},
@@ -182,10 +182,10 @@ func renderCautemWorkloadPodTemplate(config SandboxDriverConfig, params cautemWo
 	}
 	volumes := append(append([]any{}, userVolumes...), []any{
 		map[string]any{"name": "quarshell-runtime", "emptyDir": map[string]any{"medium": "Memory", "sizeLimit": "16Mi"}},
-		map[string]any{"name": cautemWorkloadCredentialName, "secret": map[string]any{
+		map[string]any{"name": quarshellWorkloadCredentialName, "secret": map[string]any{
 			"secretName": params.Base.SandboxBootstrapSecretName, "defaultMode": int64(0o440),
 		}},
-		map[string]any{"name": "cautem-run", "emptyDir": map[string]any{"medium": "Memory", "sizeLimit": "16Mi"}},
+		map[string]any{"name": "quarshell-run", "emptyDir": map[string]any{"medium": "Memory", "sizeLimit": "16Mi"}},
 	}...)
 	podLabels := map[string]any{
 		labelSandboxID:    params.Base.SandboxID,
@@ -229,18 +229,18 @@ func renderCautemWorkloadPodTemplate(config SandboxDriverConfig, params cautemWo
 	}, nil
 }
 
-func cautemWorkloadSSHDContainer(config SandboxDriverConfig, params cautemWorkloadRenderParams) map[string]any {
+func quarshellWorkloadSSHDContainer(config SandboxDriverConfig, params quarshellWorkloadRenderParams) map[string]any {
 	args := []any{
-		"--socket", cautemWorkloadRunDir + "/sshd.sock",
-		"--init", cautemWorkloadRuntimeDir + "/cautem-init",
+		"--socket", quarshellWorkloadRunDir + "/sshd.sock",
+		"--init", quarshellWorkloadRuntimeDir + "/quarshell-init",
 		"--workdir", "/workspace",
 		"--shell", "/bin/sh",
 	}
 	mounts := []any{
-		map[string]any{"name": "quarshell-runtime", "mountPath": cautemWorkloadRuntimeDir, "readOnly": true},
-		map[string]any{"name": "cautem-run", "mountPath": cautemWorkloadRunDir},
+		map[string]any{"name": "quarshell-runtime", "mountPath": quarshellWorkloadRuntimeDir, "readOnly": true},
+		map[string]any{"name": "quarshell-run", "mountPath": quarshellWorkloadRunDir},
 	}
-	if cautemWorkloadUsesDefaultWorkspace(config) {
+	if quarshellWorkloadUsesDefaultWorkspace(config) {
 		mounts = append(mounts, map[string]any{"name": workspaceVolumeName, "mountPath": "/workspace"})
 	} else {
 		for _, mount := range config.Containers.Agent.VolumeMounts {
@@ -251,11 +251,11 @@ func cautemWorkloadSSHDContainer(config SandboxDriverConfig, params cautemWorklo
 		}
 	}
 	return map[string]any{
-		"name": "cautem-sshd", "image": params.Base.SandboxRuntimeImage,
-		"command": []any{cautemWorkloadRuntimeDir + "/cautem-sshd"}, "args": args,
+		"name": "quarshell-sshd", "image": params.Base.SandboxRuntimeImage,
+		"command": []any{quarshellWorkloadRuntimeDir + "/quarshell-sshd"}, "args": args,
 		"workingDir": "/workspace",
 		"readinessProbe": map[string]any{
-			"exec":             map[string]any{"command": []any{"/bin/sh", "-ceu", "test -S " + cautemWorkloadRunDir + "/sshd.sock"}},
+			"exec":             map[string]any{"command": []any{"/bin/sh", "-ceu", "test -S " + quarshellWorkloadRunDir + "/sshd.sock"}},
 			"timeoutSeconds":   int64(1),
 			"periodSeconds":    int64(1),
 			"successThreshold": int64(1),
@@ -282,18 +282,18 @@ func volumeMountToUnstructured(mount VolumeMountConfig) map[string]any {
 	return result
 }
 
-func cautemWorkloadEnvironment(params cautemWorkloadRenderParams) ([]any, error) {
+func quarshellWorkloadEnvironment(params quarshellWorkloadRenderParams) ([]any, error) {
 	values := make(map[string]string, len(params.Env)+16)
 	for _, entry := range params.Env {
 		key, value, ok := strings.Cut(entry, "=")
 		if !ok || !kubernetesEnvKey.MatchString(key) || strings.ContainsRune(value, '\x00') {
-			return nil, fmt.Errorf("cautem workload environment contains an invalid entry")
+			return nil, fmt.Errorf("quarshell workload environment contains an invalid entry")
 		}
-		if isCautemProxyManagedEnvironmentKey(key) || isCautemWorkloadManagedEnvironmentKey(key) {
-			return nil, fmt.Errorf("cautem workload environment cannot override a managed runtime setting")
+		if isQuarshellProxyManagedEnvironmentKey(key) || isQuarshellWorkloadManagedEnvironmentKey(key) {
+			return nil, fmt.Errorf("quarshell workload environment cannot override a managed runtime setting")
 		}
 		if _, duplicate := values[key]; duplicate {
-			return nil, fmt.Errorf("cautem workload environment contains a duplicate key")
+			return nil, fmt.Errorf("quarshell workload environment contains a duplicate key")
 		}
 		values[key] = value
 	}
@@ -303,22 +303,22 @@ func cautemWorkloadEnvironment(params cautemWorkloadRenderParams) ([]any, error)
 	proxyService := runtimeServiceFQDN("os-proxy-"+id, params.Base.Namespace)
 	endpoint := net.JoinHostPort(controlService, fmt.Sprint(supervisorControlPort))
 	targetListen := net.JoinHostPort("0.0.0.0", fmt.Sprint(params.BoundaryPort))
-	proxyURL := "http://" + net.JoinHostPort(proxyService, fmt.Sprint(cautemProxyListenPort))
+	proxyURL := "http://" + net.JoinHostPort(proxyService, fmt.Sprint(quarshellProxyListenPort))
 	noProxy := strings.Join([]string{"localhost", "127.0.0.1", "::1", workloadService, controlService, proxyService}, ",")
 	managed := map[string]string{
-		driver.MainProcessRestartPolicyEnv:      params.RestartPolicy,
-		"CAUTEM_POLICY":                         cautemWorkloadPrivateDir + "/policy.yaml",
-		"CAUTEM_SUPERVISOR_CONTROL_ENDPOINT":    endpoint,
-		"CAUTEM_SUPERVISOR_CONTROL_CLIENT_CA":   cautemWorkloadPrivateDir + "/control-client-ca.pem",
-		"CAUTEM_SUPERVISOR_CONTROL_CLIENT_CERT": cautemWorkloadPrivateDir + "/control-client.crt",
-		"CAUTEM_SUPERVISOR_CONTROL_CLIENT_KEY":  cautemWorkloadPrivateDir + "/control-client.key",
-		"CAUTEM_SUPERVISOR_CONTROL_PRIVATE_DIR": cautemWorkloadPrivateDir,
-		"CAUTEM_RELAY_TARGET_LISTEN":            targetListen,
-		"CAUTEM_RELAY_TARGET_CLIENT_CA":         cautemWorkloadPrivateDir + "/target-client-ca.pem",
-		"CAUTEM_RELAY_TARGET_SERVER_CERT":       cautemWorkloadPrivateDir + "/target-server.crt",
-		"CAUTEM_RELAY_TARGET_SERVER_KEY":        cautemWorkloadPrivateDir + "/target-server.key",
-		"CAUTEM_RELAY_TARGET_SSH_SOCKET":        cautemWorkloadRunDir + "/sshd.sock",
-		"HTTP_PROXY":                            proxyURL, "HTTPS_PROXY": proxyURL, "ALL_PROXY": proxyURL,
+		driver.MainProcessRestartPolicyEnv:         params.RestartPolicy,
+		"QUARSHELL_POLICY":                         quarshellWorkloadPrivateDir + "/policy.yaml",
+		"QUARSHELL_SUPERVISOR_CONTROL_ENDPOINT":    endpoint,
+		"QUARSHELL_SUPERVISOR_CONTROL_CLIENT_CA":   quarshellWorkloadPrivateDir + "/control-client-ca.pem",
+		"QUARSHELL_SUPERVISOR_CONTROL_CLIENT_CERT": quarshellWorkloadPrivateDir + "/control-client.crt",
+		"QUARSHELL_SUPERVISOR_CONTROL_CLIENT_KEY":  quarshellWorkloadPrivateDir + "/control-client.key",
+		"QUARSHELL_SUPERVISOR_CONTROL_PRIVATE_DIR": quarshellWorkloadPrivateDir,
+		"QUARSHELL_RELAY_TARGET_LISTEN":            targetListen,
+		"QUARSHELL_RELAY_TARGET_CLIENT_CA":         quarshellWorkloadPrivateDir + "/target-client-ca.pem",
+		"QUARSHELL_RELAY_TARGET_SERVER_CERT":       quarshellWorkloadPrivateDir + "/target-server.crt",
+		"QUARSHELL_RELAY_TARGET_SERVER_KEY":        quarshellWorkloadPrivateDir + "/target-server.key",
+		"QUARSHELL_RELAY_TARGET_SSH_SOCKET":        quarshellWorkloadRunDir + "/sshd.sock",
+		"HTTP_PROXY":                               proxyURL, "HTTPS_PROXY": proxyURL, "ALL_PROXY": proxyURL,
 		"http_proxy": proxyURL, "https_proxy": proxyURL, "all_proxy": proxyURL,
 		"NO_PROXY": noProxy, "no_proxy": noProxy,
 	}
@@ -337,10 +337,10 @@ func cautemWorkloadEnvironment(params cautemWorkloadRenderParams) ([]any, error)
 	return env, nil
 }
 
-func isCautemWorkloadManagedEnvironmentKey(key string) bool {
+func isQuarshellWorkloadManagedEnvironmentKey(key string) bool {
 	switch key {
-	case driver.MainProcessRestartPolicyEnv, "CAUTEM_POLICY", "CAUTEM_SUPERVISOR_CONTROL_SOCKET", "CAUTEM_SUPERVISOR_CONTROL_ENDPOINT", "CAUTEM_SUPERVISOR_CONTROL_LISTEN", "CAUTEM_SUPERVISOR_CONTROL_CLIENT_CA", "CAUTEM_SUPERVISOR_CONTROL_CLIENT_CERT", "CAUTEM_SUPERVISOR_CONTROL_CLIENT_KEY", "CAUTEM_SUPERVISOR_CONTROL_PRIVATE_DIR", "CAUTEM_SUPERVISOR_CONTROL_SERVER_CA", "CAUTEM_SUPERVISOR_CONTROL_SERVER_CERT", "CAUTEM_SUPERVISOR_CONTROL_SERVER_KEY",
-		"CAUTEM_RELAY_TARGET_ENDPOINT", "CAUTEM_RELAY_TARGET_LISTEN", "CAUTEM_RELAY_TARGET_CLIENT_CA", "CAUTEM_RELAY_TARGET_SERVER_CERT", "CAUTEM_RELAY_TARGET_SERVER_KEY", "CAUTEM_RELAY_TARGET_SSH_SOCKET", "CAUTEM_RELAY_TARGET_SERVER_CA", "CAUTEM_RELAY_TARGET_CLIENT_CERT", "CAUTEM_RELAY_TARGET_CLIENT_KEY", "CAUTEM_RELAY_TARGET_SOCKET",
+	case driver.MainProcessRestartPolicyEnv, "QUARSHELL_POLICY", "QUARSHELL_SUPERVISOR_CONTROL_SOCKET", "QUARSHELL_SUPERVISOR_CONTROL_ENDPOINT", "QUARSHELL_SUPERVISOR_CONTROL_LISTEN", "QUARSHELL_SUPERVISOR_CONTROL_CLIENT_CA", "QUARSHELL_SUPERVISOR_CONTROL_CLIENT_CERT", "QUARSHELL_SUPERVISOR_CONTROL_CLIENT_KEY", "QUARSHELL_SUPERVISOR_CONTROL_PRIVATE_DIR", "QUARSHELL_SUPERVISOR_CONTROL_SERVER_CA", "QUARSHELL_SUPERVISOR_CONTROL_SERVER_CERT", "QUARSHELL_SUPERVISOR_CONTROL_SERVER_KEY",
+		"QUARSHELL_RELAY_TARGET_ENDPOINT", "QUARSHELL_RELAY_TARGET_LISTEN", "QUARSHELL_RELAY_TARGET_CLIENT_CA", "QUARSHELL_RELAY_TARGET_SERVER_CERT", "QUARSHELL_RELAY_TARGET_SERVER_KEY", "QUARSHELL_RELAY_TARGET_SSH_SOCKET", "QUARSHELL_RELAY_TARGET_SERVER_CA", "QUARSHELL_RELAY_TARGET_CLIENT_CERT", "QUARSHELL_RELAY_TARGET_CLIENT_KEY", "QUARSHELL_RELAY_TARGET_SOCKET",
 		"HTTP_PROXY", "HTTPS_PROXY", "ALL_PROXY", "NO_PROXY", "http_proxy", "https_proxy", "all_proxy", "no_proxy":
 		return true
 	default:
@@ -348,7 +348,7 @@ func isCautemWorkloadManagedEnvironmentKey(key string) bool {
 	}
 }
 
-func validateCautemWorkloadRenderParams(input cautemWorkloadRenderParams) (cautemWorkloadRenderParams, error) {
+func validateQuarshellWorkloadRenderParams(input quarshellWorkloadRenderParams) (quarshellWorkloadRenderParams, error) {
 	params := input
 	base, err := validateAgentSandboxRenderParams(input.Base)
 	if err != nil {
@@ -357,16 +357,16 @@ func validateCautemWorkloadRenderParams(input cautemWorkloadRenderParams) (caute
 	params.Base = base
 	imageParts := strings.Split(base.SandboxRuntimeImage, "@sha256:")
 	if len(imageParts) != 2 || strings.TrimSpace(imageParts[0]) == "" || len(imageParts[1]) != 64 {
-		return params, fmt.Errorf("cautem helper image must be pinned by sha256 digest")
+		return params, fmt.Errorf("quarshell helper image must be pinned by sha256 digest")
 	}
 	if _, err := hex.DecodeString(imageParts[1]); err != nil {
-		return params, fmt.Errorf("cautem helper image must use a valid sha256 digest")
+		return params, fmt.Errorf("quarshell helper image must use a valid sha256 digest")
 	}
 	if params.BoundaryPort == 0 {
-		params.BoundaryPort = cautemWorkloadBoundaryPort
+		params.BoundaryPort = quarshellWorkloadBoundaryPort
 	}
 	if params.BoundaryPort < 1024 || params.BoundaryPort > 65535 {
-		return params, fmt.Errorf("cautem workload boundary port must be between 1024 and 65535")
+		return params, fmt.Errorf("quarshell workload boundary port must be between 1024 and 65535")
 	}
 	if params.Base.WorkspaceStorageSize == "" {
 		params.Base.WorkspaceStorageSize = defaultWorkspaceStorage
@@ -375,17 +375,17 @@ func validateCautemWorkloadRenderParams(input cautemWorkloadRenderParams) (caute
 		return params, fmt.Errorf("invalid workspace storage size %q", params.Base.WorkspaceStorageSize)
 	}
 	if params.Base.SandboxUID < 1 || params.Base.SandboxGID < 1 || params.Base.SandboxUID > int64(^uint32(0)) || params.Base.SandboxGID > int64(^uint32(0)) {
-		return params, fmt.Errorf("cautem workload identity must use non-root 32-bit UID/GID values")
+		return params, fmt.Errorf("quarshell workload identity must use non-root 32-bit UID/GID values")
 	}
 	for _, arg := range params.Command {
 		if strings.ContainsRune(arg, '\x00') {
-			return params, fmt.Errorf("cautem workload command contains a NUL byte")
+			return params, fmt.Errorf("quarshell workload command contains a NUL byte")
 		}
 	}
 	return params, nil
 }
 
-func cautemWorkloadUsesDefaultWorkspace(config SandboxDriverConfig) bool {
+func quarshellWorkloadUsesDefaultWorkspace(config SandboxDriverConfig) bool {
 	for _, mount := range config.Containers.Agent.VolumeMounts {
 		mountPath := strings.TrimSuffix(mount.MountPath, "/")
 		if mountPath == "/workspace" || strings.HasPrefix(mountPath, "/workspace/") {

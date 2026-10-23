@@ -85,10 +85,10 @@ func (d *Driver) createInput(ctx context.Context, input kubernetesCreateInput) (
 		return driver.Handle{}, fmt.Errorf("kubernetes guest TLS files must be configured exactly when the Gateway endpoint uses HTTPS")
 	}
 	proxyEnv := append([]string(nil), input.ProxyEnv...)
-	if err := requireProxyEnvironmentValue(proxyEnv, "CAUTEM_GATEWAY_URL", gatewayURL); err != nil {
+	if err := requireProxyEnvironmentValue(proxyEnv, "QUARSHELL_GATEWAY_URL", gatewayURL); err != nil {
 		return driver.Handle{}, err
 	}
-	if err := requireProxyEnvironmentValue(proxyEnv, "CAUTEM_SANDBOX", input.Name); err != nil {
+	if err := requireProxyEnvironmentValue(proxyEnv, "QUARSHELL_SANDBOX", input.Name); err != nil {
 		return driver.Handle{}, err
 	}
 	namespace, _, _, err := renderWorkspaceIsolationResources(d.gatewayID, workspace)
@@ -126,7 +126,7 @@ func (d *Driver) createInput(ctx context.Context, input kubernetesCreateInput) (
 		WorkspaceStorageSize:    d.runtimeConfig.WorkspaceStorageSize,
 		WorkspaceStorageClass:   d.runtimeConfig.WorkspaceStorageClass, GPU: input.GPU, GPUCount: input.GPUCount,
 	}
-	resource, err := renderCautemAgentSandboxResource(driverConfig, cautemWorkloadRenderParams{
+	resource, err := renderQuarshellAgentSandboxResource(driverConfig, quarshellWorkloadRenderParams{
 		Base: renderParams, Command: append([]string(nil), input.Command...), Env: append([]string(nil), input.Environment...),
 		RestartPolicy: restartPolicy, BoundaryPort: renderParams.BoundaryPort,
 	})
@@ -135,17 +135,17 @@ func (d *Driver) createInput(ctx context.Context, input kubernetesCreateInput) (
 	}
 	metadata := resource["metadata"].(map[string]any)
 	annotations := metadata["annotations"].(map[string]any)
-	annotations[annotationCautemGatewayURL] = gatewayURL
-	annotations[annotationCautemGatewayRPC] = gatewayGRPCEndpoint
-	annotations[annotationCautemGatewayTLS] = fmt.Sprint(guestTLS != nil)
+	annotations[annotationQuarshellGatewayURL] = gatewayURL
+	annotations[annotationQuarshellGatewayRPC] = gatewayGRPCEndpoint
+	annotations[annotationQuarshellGatewayTLS] = fmt.Sprint(guestTLS != nil)
 	runtimeParams := agentSandboxRuntimeRenderParams{
 		Namespace: namespace, SandboxResourceName: input.Name, SandboxResourceAPIVersion: sandboxAPIGroup + "/" + version,
 		SandboxID: sandboxID, SandboxName: input.Name, Workspace: workspace, GatewayID: d.gatewayID,
-		Generation: generation, CautemProxyImage: d.runtimeConfig.ProxyImage,
-		CautemProxyImagePullPolicy: d.runtimeConfig.ProxyImagePullPolicy,
-		CautemGatewayURL:           gatewayURL, CautemGatewayGRPCEndpoint: gatewayGRPCEndpoint,
-		CautemGatewayTLS:   guestTLS != nil,
-		ServiceAccountName: d.runtimeConfig.ServiceAccountName, ImagePullSecrets: d.runtimeConfig.ImagePullSecrets,
+		Generation: generation, QuarshellProxyImage: d.runtimeConfig.ProxyImage,
+		QuarshellProxyImagePullPolicy: d.runtimeConfig.ProxyImagePullPolicy,
+		QuarshellGatewayURL:           gatewayURL, QuarshellGatewayGRPCEndpoint: gatewayGRPCEndpoint,
+		QuarshellGatewayTLS: guestTLS != nil,
+		ServiceAccountName:  d.runtimeConfig.ServiceAccountName, ImagePullSecrets: d.runtimeConfig.ImagePullSecrets,
 		ControlUID: d.runtimeConfig.ControlUID, ControlGID: d.runtimeConfig.ControlGID, BoundaryPort: d.runtimeConfig.BoundaryPort,
 	}
 	backend := d.createBackend
@@ -155,8 +155,8 @@ func (d *Driver) createInput(ctx context.Context, input kubernetesCreateInput) (
 	identity, err := runAgentSandboxCreateSequence(ctx, backend, agentSandboxCreateSequenceInput{
 		SandboxResource: resource,
 		RuntimeParams:   runtimeParams,
-		BuildCautemSecrets: func(identity agentSandboxCreateIdentity) ([]map[string]any, error) {
-			return buildCautemGenerationSecretsWithGuestTLS(identity, policy, proxyEnv, guestTLS)
+		BuildQuarshellSecrets: func(identity agentSandboxCreateIdentity) ([]map[string]any, error) {
+			return buildQuarshellGenerationSecretsWithGuestTLS(identity, policy, proxyEnv, guestTLS)
 		},
 	})
 	if err != nil {
@@ -254,10 +254,10 @@ func resolveKubernetesGatewayEndpoint(requested, configured string) (string, str
 	}
 	endpoint := parsed.Host
 	gatewayURL := strings.TrimRight(parsed.String(), "/")
-	if err := validateCautemGatewayURL("kubernetes Gateway URL", gatewayURL); err != nil {
+	if err := validateQuarshellGatewayURL("kubernetes Gateway URL", gatewayURL); err != nil {
 		return "", "", err
 	}
-	if err := validateCautemGatewayEndpoint(endpoint); err != nil {
+	if err := validateQuarshellGatewayEndpoint(endpoint); err != nil {
 		return "", "", err
 	}
 	return gatewayURL, endpoint, nil

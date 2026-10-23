@@ -46,7 +46,7 @@ func ValidateGPURequest(spec sandboxCreateSpec) error {
 
 const (
 	defaultCDIDevice   = "nvidia.com/gpu=all"
-	labelGPU           = "cautem.gpu"
+	labelGPU           = "quarshell.gpu"
 	gpuSandboxImage    = defaults.ImageGPU
 	guiGPUSandboxImage = defaults.ImageGUIGPU
 )
@@ -86,7 +86,7 @@ func normalizedCDIDevices(values []string) []string {
 }
 
 func envCDIDevices() []string {
-	return normalizedCDIDevices(strings.Split(strings.TrimSpace(os.Getenv("CAUTEM_GPU_CDI")), ","))
+	return normalizedCDIDevices(strings.Split(strings.TrimSpace(os.Getenv("QUARSHELL_GPU_CDI")), ","))
 }
 
 // localCDIDevices mirrors the pinned Podman inventory rule: only numbered

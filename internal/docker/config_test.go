@@ -10,11 +10,11 @@ import (
 )
 
 func TestConfigFromMapAppliesSupportedGatewayEngineFields(t *testing.T) {
-	cfg, socket, err := ConfigFromMap(map[string]any{"socket_path": "/var/run/docker.sock", "default_image": "alpine:3.22", "sandbox_label": "team-a", "network_name": "openshell", "host_gateway_ip": "127.0.0.1", "sandbox_pids_limit": int64(512), "enable_bind_mounts": true, "grpc_endpoint": "http://gateway:7443", "ssh_socket_path": "/run/cautem/ssh.sock"})
+	cfg, socket, err := ConfigFromMap(map[string]any{"socket_path": "/var/run/docker.sock", "default_image": "alpine:3.22", "sandbox_label": "team-a", "network_name": "openshell", "host_gateway_ip": "127.0.0.1", "sandbox_pids_limit": int64(512), "enable_bind_mounts": true, "grpc_endpoint": "http://gateway:7443", "ssh_socket_path": "/run/quarshell/ssh.sock"})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if socket != "unix:///var/run/docker.sock" || cfg.DefaultImage != "alpine:3.22" || cfg.SandboxNamespace != "team-a" || cfg.NetworkName != "openshell" || cfg.HostGatewayIP != "127.0.0.1" || cfg.PidsLimit != 512 || !cfg.EnableBindMounts || cfg.GatewayGRPCEndpoint != "http://gateway:7443" || cfg.SandboxSSHSocketPath != "/run/cautem/ssh.sock" {
+	if socket != "unix:///var/run/docker.sock" || cfg.DefaultImage != "alpine:3.22" || cfg.SandboxNamespace != "team-a" || cfg.NetworkName != "openshell" || cfg.HostGatewayIP != "127.0.0.1" || cfg.PidsLimit != 512 || !cfg.EnableBindMounts || cfg.GatewayGRPCEndpoint != "http://gateway:7443" || cfg.SandboxSSHSocketPath != "/run/quarshell/ssh.sock" {
 		t.Fatalf("config=%+v socket=%q", cfg, socket)
 	}
 }
@@ -27,11 +27,11 @@ func TestConfigFromMapRejectsConflictingSandboxLabelAliases(t *testing.T) {
 
 func TestConfigFromMapAcceptsOnlyAbsoluteCleanupManifestDirectory(t *testing.T) {
 	manifestDir := filepath.Join(t.TempDir(), "cleanup")
-	cfg, _, err := ConfigFromMap(map[string]any{"cautem_internal_cleanup_manifest_dir": manifestDir})
+	cfg, _, err := ConfigFromMap(map[string]any{"quarshell_internal_cleanup_manifest_dir": manifestDir})
 	if err != nil || cfg.CleanupManifestDir != manifestDir {
 		t.Fatalf("cleanup manifest config=%q err=%v", cfg.CleanupManifestDir, err)
 	}
-	if _, _, err := ConfigFromMap(map[string]any{"cautem_internal_cleanup_manifest_dir": "relative/cleanup"}); err == nil {
+	if _, _, err := ConfigFromMap(map[string]any{"quarshell_internal_cleanup_manifest_dir": "relative/cleanup"}); err == nil {
 		t.Fatal("accepted relative cleanup manifest directory")
 	}
 }
@@ -58,7 +58,7 @@ func TestConfigFromMapRejectsUnconsumedAndInvalidFields(t *testing.T) {
 func TestConfigFromMapRejectsExplicitNullForEverySupportedField(t *testing.T) {
 	fields := []string{
 		"socket_path", "default_image", "sandbox_label", "sandbox_namespace", "guest_tls_ca", "guest_tls_cert", "guest_tls_key",
-		"network_name", "host_gateway_ip", "grpc_endpoint", "ssh_socket_path", "cautem_internal_cleanup_manifest_dir",
+		"network_name", "host_gateway_ip", "grpc_endpoint", "ssh_socket_path", "quarshell_internal_cleanup_manifest_dir",
 		"sandbox_pids_limit", "stop_timeout_secs", "gateway_port", "enable_bind_mounts",
 		"provider_spiffe_workload_api_socket", "image_pull_policy", "https_proxy", "no_proxy", "proxy_auth_file",
 		"proxy_auth_allow_insecure", "proxy_connect_by_hostname", "proxy_ca_bundle", "egress_ca_bundle", "reconcile_data_ownership", "app_armor_profile", "allow_driver_config", "resource_admission",

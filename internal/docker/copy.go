@@ -299,7 +299,7 @@ func rejectExistingSymlink(root *os.Root, name string) error {
 	return nil
 }
 
-// EnsureSSHDaemon starts cautem-sshd as root on the relay socket
+// EnsureSSHDaemon starts quarshell-sshd as root on the relay socket
 // (idempotent: sshd exits when a live daemon already owns the socket) and
 // waits until the socket exists. Returns driver.ErrSSHDisabled for sandboxes
 // created without SSH.

@@ -54,7 +54,7 @@ func (backend *dynamicAgentSandboxCreateBackend) SetSandboxRuntimeGeneration(
 	identity agentSandboxCreateIdentity,
 	newGeneration string,
 ) (*unstructured.Unstructured, error) {
-	if err := validateCautemSecretIdentity(identity); err != nil {
+	if err := validateQuarshellSecretIdentity(identity); err != nil {
 		return nil, err
 	}
 	if generationSuffix(newGeneration) == "" || newGeneration == identity.Generation {
@@ -103,7 +103,7 @@ func (backend *dynamicAgentSandboxCreateBackend) SetSandboxRuntimeGeneration(
 		updated := false
 		for _, raw := range volumes {
 			volume, _ := raw.(map[string]any)
-			if volume["name"] != cautemWorkloadCredentialName {
+			if volume["name"] != quarshellWorkloadCredentialName {
 				continue
 			}
 			secret, _ := volume["secret"].(map[string]any)
@@ -154,7 +154,7 @@ func requireSandboxWorkloadSecretReference(object *unstructured.Unstructured, se
 	}
 	for _, raw := range volumes {
 		volume, _ := raw.(map[string]any)
-		if volume["name"] != cautemWorkloadCredentialName {
+		if volume["name"] != quarshellWorkloadCredentialName {
 			continue
 		}
 		secret, _ := volume["secret"].(map[string]any)
@@ -175,11 +175,11 @@ func sandboxIsSuspended(object *unstructured.Unstructured, version string) bool 
 	return found && replicas == 0
 }
 
-// DeleteCautemGenerationSecrets removes only the three immutable Secrets owned
+// DeleteQuarshellGenerationSecrets removes only the three immutable Secrets owned
 // by the expected Agent Sandbox UID. UID preconditions protect against name
 // reuse while a restart cleanup is in flight.
-func (backend *dynamicAgentSandboxCreateBackend) DeleteCautemGenerationSecrets(ctx context.Context, identity agentSandboxCreateIdentity) error {
-	if err := validateCautemSecretIdentity(identity); err != nil {
+func (backend *dynamicAgentSandboxCreateBackend) DeleteQuarshellGenerationSecrets(ctx context.Context, identity agentSandboxCreateIdentity) error {
+	if err := validateQuarshellSecretIdentity(identity); err != nil {
 		return err
 	}
 	resource, err := backend.namespacedResource(coreV1GVR("secrets"), identity.Namespace)
@@ -198,22 +198,22 @@ func (backend *dynamicAgentSandboxCreateBackend) DeleteCautemGenerationSecrets(c
 			continue
 		}
 		if err != nil {
-			failures = append(failures, fmt.Errorf("get Cautem runtime Secret %s before cleanup: %w", name, err))
+			failures = append(failures, fmt.Errorf("get Quarshell runtime Secret %s before cleanup: %w", name, err))
 			continue
 		}
-		if !cautemSecretOwnedBySandbox(secret, identity) {
-			failures = append(failures, fmt.Errorf("refusing to delete Cautem runtime Secret %s with a different owner", name))
+		if !quarshellSecretOwnedBySandbox(secret, identity) {
+			failures = append(failures, fmt.Errorf("refusing to delete Quarshell runtime Secret %s with a different owner", name))
 			continue
 		}
 		uid := types.UID(secret.GetUID())
 		if err := resource.Delete(ctx, name, metav1.DeleteOptions{Preconditions: &metav1.Preconditions{UID: &uid}}); err != nil && !apierrors.IsNotFound(err) {
-			failures = append(failures, fmt.Errorf("delete Cautem runtime Secret %s: %w", name, err))
+			failures = append(failures, fmt.Errorf("delete Quarshell runtime Secret %s: %w", name, err))
 		}
 	}
 	return errors.Join(failures...)
 }
 
-func cautemSecretOwnedBySandbox(secret *unstructured.Unstructured, identity agentSandboxCreateIdentity) bool {
+func quarshellSecretOwnedBySandbox(secret *unstructured.Unstructured, identity agentSandboxCreateIdentity) bool {
 	if secret.GetNamespace() != identity.Namespace || secret.GetLabels()[labelSandboxID] != identity.SandboxID {
 		return false
 	}

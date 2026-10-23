@@ -64,9 +64,9 @@ type agentSandboxPodIdentity struct {
 	DropAllCapabilities             bool
 	PrivilegeEscalationDisabled     bool
 	AdditionalContainers            bool
-	CautemContainerMatches          bool
-	CautemVolumeSourcesMatch        bool
-	CautemHasRawTokenEnv            bool
+	QuarshellContainerMatches       bool
+	QuarshellVolumeSourcesMatch     bool
+	QuarshellHasRawTokenEnv         bool
 }
 
 type agentSandboxWorkloadIdentity struct {
@@ -98,9 +98,9 @@ type agentSandboxWorkloadIdentity struct {
 	PrivilegeEscalationDisabled             bool
 	AdditionalApplicationContainers         bool
 	OtherInitContainersMountBootstrapSecret bool
-	CautemAgentMountsPrivateSecret          bool
-	CautemInitMountsPrivateSecret           bool
-	CautemSSHDContainerMatches              bool
+	QuarshellAgentMountsPrivateSecret       bool
+	QuarshellInitMountsPrivateSecret        bool
+	QuarshellSSHDContainerMatches           bool
 	InitContainerNames                      []string
 }
 
@@ -124,7 +124,7 @@ type agentSandboxCreateSequenceInput struct {
 	SandboxResource       map[string]any
 	RuntimeParams         agentSandboxRuntimeRenderParams
 	BuildBootstrapSecrets func(agentSandboxCreateIdentity) ([]map[string]any, error)
-	BuildCautemSecrets    func(agentSandboxCreateIdentity) ([]map[string]any, error)
+	BuildQuarshellSecrets func(agentSandboxCreateIdentity) ([]map[string]any, error)
 }
 
 // agentSandboxCreateSequenceBackend is a narrow control-plane seam. Its
@@ -171,9 +171,9 @@ func runAgentSandboxCreateSequence(
 	if strings.TrimSpace(params.Generation) == "" {
 		return agentSandboxCreateIdentity{}, fmt.Errorf("sandbox runtime generation is required")
 	}
-	if params.CautemProxyImage != "" {
-		if input.BuildCautemSecrets == nil {
-			return agentSandboxCreateIdentity{}, fmt.Errorf("cautem generation Secret builder is required")
+	if params.QuarshellProxyImage != "" {
+		if input.BuildQuarshellSecrets == nil {
+			return agentSandboxCreateIdentity{}, fmt.Errorf("quarshell generation Secret builder is required")
 		}
 	} else if input.BuildBootstrapSecrets == nil {
 		return agentSandboxCreateIdentity{}, fmt.Errorf("bootstrap Secret builder is required")
@@ -292,10 +292,10 @@ func runAgentSandboxCreateSequence(
 		return rollback("record runtime pair evidence", err)
 	}
 	var secrets []map[string]any
-	if params.CautemProxyImage != "" {
-		secrets, err = input.BuildCautemSecrets(identity)
+	if params.QuarshellProxyImage != "" {
+		secrets, err = input.BuildQuarshellSecrets(identity)
 		if err == nil {
-			err = validateCautemGenerationSecrets(secrets, identity)
+			err = validateQuarshellGenerationSecrets(secrets, identity)
 		}
 	} else {
 		secrets, err = input.BuildBootstrapSecrets(identity)

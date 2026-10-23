@@ -2,7 +2,7 @@
 set -eu
 
 script_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
-temporary_dir=$(mktemp -d "${TMPDIR:-/tmp}/cautem-vm-artifact-test.XXXXXX")
+temporary_dir=$(mktemp -d "${TMPDIR:-/tmp}/quarshell-vm-artifact-test.XXXXXX")
 cleanup() { rm -rf "$temporary_dir"; }
 trap cleanup EXIT
 trap 'cleanup; exit 129' HUP
@@ -20,7 +20,7 @@ if [ "${1:-}" = env ]; then
   esac
   exit 0
 fi
-echo "$*" >>"$CAUTEM_TEST_GO_LOG"
+echo "$*" >>"$QUARSHELL_TEST_GO_LOG"
 output=
 previous=
 for argument in "$@"; do
@@ -50,14 +50,14 @@ else
   valid_digest=$(shasum -a 256 "$custom_umoci" | awk '{print $1}')
 fi
 invalid_digest=0000000000000000000000000000000000000000000000000000000000000000
-published="$temporary_dir/output/cautem-vm-umoci-linux-amd64"
+published="$temporary_dir/output/quarshell-vm-umoci-linux-amd64"
 printf '%s\n' keep-existing >"$published"
 
 if PATH="$temporary_dir/bin:$PATH" \
-  CAUTEM_VM_BUILD_DIR="$temporary_dir/output" \
-  CAUTEM_VM_GUEST_ARCH=amd64 \
-  CAUTEM_VM_UMOCI="$custom_umoci" \
-  CAUTEM_VM_UMOCI_SHA256="$invalid_digest" \
+  QUARSHELL_VM_BUILD_DIR="$temporary_dir/output" \
+  QUARSHELL_VM_GUEST_ARCH=amd64 \
+  QUARSHELL_VM_UMOCI="$custom_umoci" \
+  QUARSHELL_VM_UMOCI_SHA256="$invalid_digest" \
   "$script_dir/build-vm-runtime.sh" >"$temporary_dir/invalid.log" 2>&1; then
   echo "runtime build accepted an umoci digest mismatch" >&2
   exit 1
@@ -66,17 +66,17 @@ if [ "$(cat "$published")" != keep-existing ]; then
   echo "digest mismatch replaced the previously published umoci" >&2
   exit 1
 fi
-if find "$temporary_dir/output" -name '.cautem-vm-umoci.*' -print | grep . >/dev/null; then
+if find "$temporary_dir/output" -name '.quarshell-vm-umoci.*' -print | grep . >/dev/null; then
   echo "digest mismatch left a temporary umoci artifact" >&2
   exit 1
 fi
 
 PATH="$temporary_dir/bin:$PATH" \
-CAUTEM_TEST_GO_LOG="$temporary_dir/go.log" \
-CAUTEM_VM_BUILD_DIR="$temporary_dir/output" \
-CAUTEM_VM_GUEST_ARCH=amd64 \
-CAUTEM_VM_UMOCI="$custom_umoci" \
-CAUTEM_VM_UMOCI_SHA256="$valid_digest" \
+QUARSHELL_TEST_GO_LOG="$temporary_dir/go.log" \
+QUARSHELL_VM_BUILD_DIR="$temporary_dir/output" \
+QUARSHELL_VM_GUEST_ARCH=amd64 \
+QUARSHELL_VM_UMOCI="$custom_umoci" \
+QUARSHELL_VM_UMOCI_SHA256="$valid_digest" \
 "$script_dir/build-vm-runtime.sh" >"$temporary_dir/valid.log" 2>&1 || {
   cat "$temporary_dir/valid.log" >&2
   echo "verified artifact did not complete the mocked runtime build" >&2
@@ -115,14 +115,14 @@ if "$script_dir/verify-vm-runtime-manifest.py" "$temporary_dir/output/vm-runtime
   echo "runtime manifest accepted a mismatched host/guest architecture" >&2
   exit 1
 fi
-missing="$temporary_dir/output/cautem-vm-guest-agent-linux-amd64"
+missing="$temporary_dir/output/quarshell-vm-guest-agent-linux-amd64"
 mv "$missing" "$temporary_dir/missing-guest-agent"
 if "$script_dir/verify-vm-runtime-manifest.py" "$temporary_dir/output/vm-runtime-manifest.json" linux/amd64 amd64 >"$temporary_dir/missing.log" 2>&1; then
   echo "runtime manifest accepted a missing guest agent" >&2
   exit 1
 fi
 mv "$temporary_dir/missing-guest-agent" "$missing"
-printf 'tampered\n' >>"$temporary_dir/output/cautem-vm-worker"
+printf 'tampered\n' >>"$temporary_dir/output/quarshell-vm-worker"
 if "$script_dir/verify-vm-runtime-manifest.py" "$temporary_dir/output/vm-runtime-manifest.json" linux/amd64 amd64 >"$temporary_dir/tampered.log" 2>&1; then
   echo "runtime manifest accepted a tampered worker" >&2
   exit 1

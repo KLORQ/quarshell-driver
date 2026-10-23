@@ -8,12 +8,12 @@ import (
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 )
 
-func TestRenderCautemAgentSandboxResourceInstallsRuntimeAndUsesPrivateProxyBoundary(t *testing.T) {
-	params := testCautemWorkloadRenderParams()
+func TestRenderQuarshellAgentSandboxResourceInstallsRuntimeAndUsesPrivateProxyBoundary(t *testing.T) {
+	params := testQuarshellWorkloadRenderParams()
 	params.RestartPolicy = "on-failure"
-	resource, err := renderCautemAgentSandboxResource(SandboxDriverConfig{}, params)
+	resource, err := renderQuarshellAgentSandboxResource(SandboxDriverConfig{}, params)
 	if err != nil {
-		t.Fatalf("renderCautemAgentSandboxResource() error = %v", err)
+		t.Fatalf("renderQuarshellAgentSandboxResource() error = %v", err)
 	}
 	metadata := renderMap(t, resource["metadata"], "sandbox metadata")
 	annotations := renderMap(t, metadata["annotations"], "sandbox annotations")
@@ -41,10 +41,10 @@ func TestRenderCautemAgentSandboxResourceInstallsRuntimeAndUsesPrivateProxyBound
 		t.Fatalf("init container count = %d; want helper install and workspace init", len(init))
 	}
 	helper := renderMap(t, init[0], "runtime helper init")
-	if helper["image"] != params.Base.SandboxRuntimeImage || !strings.Contains(strings.Join(toStrings(t, helper["args"]), " "), "cautem-supervisor") {
+	if helper["image"] != params.Base.SandboxRuntimeImage || !strings.Contains(strings.Join(toStrings(t, helper["args"]), " "), "quarshell-supervisor") {
 		t.Fatalf("runtime helper init = %#v", helper)
 	}
-	if cautemHasVolumeMount(t, helper, cautemWorkloadCredentialName) {
+	if quarshellHasVolumeMount(t, helper, quarshellWorkloadCredentialName) {
 		t.Fatal("trusted helper install init received workload credentials")
 	}
 	containers := renderList(t, podSpec["containers"], "containers")
@@ -52,14 +52,14 @@ func TestRenderCautemAgentSandboxResourceInstallsRuntimeAndUsesPrivateProxyBound
 		t.Fatalf("workload container count = %d; want agent and relay-only sshd", len(containers))
 	}
 	container := renderMap(t, containers[0], "agent container")
-	if got := renderList(t, container["command"], "agent command"); len(got) != 1 || got[0] != cautemWorkloadRuntimeDir+"/cautem-supervisor" {
+	if got := renderList(t, container["command"], "agent command"); len(got) != 1 || got[0] != quarshellWorkloadRuntimeDir+"/quarshell-supervisor" {
 		t.Fatalf("agent command = %#v", got)
 	}
 	args := toStrings(t, container["args"])
-	if strings.Join(args, " ") != "-- /cautem/runtime/cautem-init --policy /cautem/private/policy.yaml -- python3 -m http.server" {
+	if strings.Join(args, " ") != "-- /quarshell/runtime/quarshell-init --policy /quarshell/private/policy.yaml -- python3 -m http.server" {
 		t.Fatalf("agent args = %#v", args)
 	}
-	if renderEnvValue(t, container, "CAUTEM_SUPERVISOR_CONTROL_ENDPOINT") != runtimeServiceFQDN("os-supervisor-"+params.Base.SandboxID, params.Base.Namespace)+":5502" {
+	if renderEnvValue(t, container, "QUARSHELL_SUPERVISOR_CONTROL_ENDPOINT") != runtimeServiceFQDN("os-supervisor-"+params.Base.SandboxID, params.Base.Namespace)+":5502" {
 		t.Fatalf("control endpoint env = %#v", container["env"])
 	}
 	if got := renderEnvValue(t, container, driver.MainProcessRestartPolicyEnv); got != "on-failure" {
@@ -71,29 +71,29 @@ func TestRenderCautemAgentSandboxResourceInstallsRuntimeAndUsesPrivateProxyBound
 			t.Fatalf("%s = %q; want %q", key, got, proxyURL)
 		}
 	}
-	if hasEnv(container, "CAUTEM_SANDBOX_TOKEN") || hasEnv(container, "CAUTEM_RELAY_TARGET_CLIENT_KEY") {
+	if hasEnv(container, "QUARSHELL_SANDBOX_TOKEN") || hasEnv(container, "QUARSHELL_RELAY_TARGET_CLIENT_KEY") {
 		t.Fatalf("workload Pod contains a gateway token or key override: %#v", container["env"])
 	}
 	sshd := renderMap(t, containers[1], "relay-only sshd container")
-	if sshd["name"] != cautemWorkloadSSHDName || !strings.Contains(strings.Join(toStrings(t, sshd["command"]), " "), "cautem-sshd") {
+	if sshd["name"] != quarshellWorkloadSSHDName || !strings.Contains(strings.Join(toStrings(t, sshd["command"]), " "), "quarshell-sshd") {
 		t.Fatalf("relay-only sshd container = %#v", sshd)
 	}
-	if cautemHasVolumeMount(t, sshd, cautemWorkloadCredentialName) || cautemHasVolumeMount(t, sshd, "cautem-run") == false {
+	if quarshellHasVolumeMount(t, sshd, quarshellWorkloadCredentialName) || quarshellHasVolumeMount(t, sshd, "quarshell-run") == false {
 		t.Fatal("relay-only sshd must share only the runtime helper and SSH socket volumes")
 	}
 	volumes := renderList(t, podSpec["volumes"], "volumes")
-	credentials := findRenderMap(t, volumes, cautemWorkloadCredentialName)
+	credentials := findRenderMap(t, volumes, quarshellWorkloadCredentialName)
 	secret := renderMap(t, credentials["secret"], "credential Secret volume")
 	if secret["secretName"] != params.Base.SandboxBootstrapSecretName {
 		t.Fatalf("workload runtime Secret volume = %#v", secret)
 	}
 }
 
-func TestCautemWorkloadPodIdentityVerifiesAdmittedTemplate(t *testing.T) {
-	params := testCautemWorkloadRenderParams()
-	resource, err := renderCautemAgentSandboxResource(SandboxDriverConfig{}, params)
+func TestQuarshellWorkloadPodIdentityVerifiesAdmittedTemplate(t *testing.T) {
+	params := testQuarshellWorkloadRenderParams()
+	resource, err := renderQuarshellAgentSandboxResource(SandboxDriverConfig{}, params)
 	if err != nil {
-		t.Fatalf("renderCautemAgentSandboxResource() error = %v", err)
+		t.Fatalf("renderQuarshellAgentSandboxResource() error = %v", err)
 	}
 	spec := renderMap(t, resource["spec"], "sandbox spec")
 	template := renderMap(t, spec["podTemplate"], "pod template")
@@ -113,40 +113,40 @@ func TestCautemWorkloadPodIdentityVerifiesAdmittedTemplate(t *testing.T) {
 	identity := workloadIdentityFromPod(pod, resource)
 	runtimeParams := testAgentSandboxRuntimeRenderParams()
 	runtimeParams.Generation = params.Base.Generation
-	runtimeParams.CautemProxyImage = testCautemProxyPodRenderParams().ProxyImage
+	runtimeParams.QuarshellProxyImage = testQuarshellProxyPodRenderParams().ProxyImage
 	if err := validateAgentSandboxWorkloadIdentity(identity, runtimeParams, "sandbox-cr-uid", resource); err != nil {
 		t.Fatalf("validateAgentSandboxWorkloadIdentity() error = %v", err)
 	}
 }
 
-func TestCautemWorkloadEnvironmentRejectsCredentialAndProxyOverrides(t *testing.T) {
+func TestQuarshellWorkloadEnvironmentRejectsCredentialAndProxyOverrides(t *testing.T) {
 	for _, entry := range []string{
-		"CAUTEM_SUPERVISOR_CONTROL_ENDPOINT=attacker:1",
-		"CAUTEM_RELAY_TARGET_SERVER_KEY=/tmp/key",
+		"QUARSHELL_SUPERVISOR_CONTROL_ENDPOINT=attacker:1",
+		"QUARSHELL_RELAY_TARGET_SERVER_KEY=/tmp/key",
 		driver.MainProcessRestartPolicyEnv + "=always",
 		"HTTP_PROXY=http://attacker:1",
 	} {
-		params := testCautemWorkloadRenderParams()
+		params := testQuarshellWorkloadRenderParams()
 		params.Env = []string{entry}
-		if _, err := cautemWorkloadEnvironment(params); err == nil {
-			t.Errorf("cautemWorkloadEnvironment(%q) succeeded; want managed env rejection", entry)
+		if _, err := quarshellWorkloadEnvironment(params); err == nil {
+			t.Errorf("quarshellWorkloadEnvironment(%q) succeeded; want managed env rejection", entry)
 		}
 	}
 }
 
-func TestRenderCautemAgentSandboxResourceRejectsUnpinnedHelperImage(t *testing.T) {
-	params := testCautemWorkloadRenderParams()
-	params.Base.SandboxRuntimeImage = "ghcr.io/cautem/cautem/sandboxes/base:latest"
-	if _, err := renderCautemAgentSandboxResource(SandboxDriverConfig{}, params); err == nil || !strings.Contains(err.Error(), "digest") {
-		t.Fatalf("renderCautemAgentSandboxResource() error = %v; want digest pin requirement", err)
+func TestRenderQuarshellAgentSandboxResourceRejectsUnpinnedHelperImage(t *testing.T) {
+	params := testQuarshellWorkloadRenderParams()
+	params.Base.SandboxRuntimeImage = "ghcr.io/quarshell/quarshell/sandboxes/base:latest"
+	if _, err := renderQuarshellAgentSandboxResource(SandboxDriverConfig{}, params); err == nil || !strings.Contains(err.Error(), "digest") {
+		t.Fatalf("renderQuarshellAgentSandboxResource() error = %v; want digest pin requirement", err)
 	}
 }
 
-func testCautemWorkloadRenderParams() cautemWorkloadRenderParams {
+func testQuarshellWorkloadRenderParams() quarshellWorkloadRenderParams {
 	base := testAgentSandboxRenderParams()
-	base.SandboxRuntimeImage = "ghcr.io/cautem/cautem/sandboxes/base@sha256:" + strings.Repeat("a", 64)
+	base.SandboxRuntimeImage = "ghcr.io/quarshell/quarshell/sandboxes/base@sha256:" + strings.Repeat("a", 64)
 	base.SandboxRuntimeImagePullPolicy = "IfNotPresent"
-	return cautemWorkloadRenderParams{
+	return quarshellWorkloadRenderParams{
 		Base: base, Command: []string{"python3", "-m", "http.server"}, Env: []string{"APP_MODE=demo"}, BoundaryPort: 5500,
 	}
 }
@@ -165,7 +165,7 @@ func toStrings(t *testing.T, values any) []string {
 	return out
 }
 
-func cautemHasVolumeMount(t *testing.T, container map[string]any, name string) bool {
+func quarshellHasVolumeMount(t *testing.T, container map[string]any, name string) bool {
 	t.Helper()
 	for _, raw := range renderList(t, container["volumeMounts"], "volume mounts") {
 		if renderMap(t, raw, "volume mount")["name"] == name {

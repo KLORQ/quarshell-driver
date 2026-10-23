@@ -44,11 +44,11 @@ func (w *cappedOutput) Write(p []byte) (int, error) {
 }
 
 // Exec runs a command in the container. With TTY, attaches stdin/stdout in raw mode.
-// When the sandbox was created with cautem-init, argv is wrapped: cautem-init -- <cmd>.
+// When the sandbox was created with quarshell-init, argv is wrapped: quarshell-init -- <cmd>.
 //
 // Docker ExecCreate Env replaces the process environment when non-empty.
 // We always merge the container's Config.Env first so HTTP_PROXY / CA / HOME from
-// create survive (otherwise `cautem exec` / create `-- agent` cannot reach the sidecar).
+// create survive (otherwise `quarshell exec` / create `-- agent` cannot reach the sidecar).
 func (d *Driver) Exec(ctx context.Context, id core.ID, req driver.ExecRequest) (driver.ExecResult, error) {
 	if len(req.Argv) == 0 {
 		return driver.ExecResult{}, fmt.Errorf("docker exec: empty argv")
@@ -69,7 +69,7 @@ func (d *Driver) Exec(ctx context.Context, id core.ID, req driver.ExecRequest) (
 	{
 		containerEnv = append([]string{}, info.Container.Config.Env...)
 		if info.Container.Config.Labels[labelInit] == "1" {
-			argv = append([]string{"/cautem/cautem-init", "--"}, req.Argv...)
+			argv = append([]string{"/quarshell/quarshell-init", "--"}, req.Argv...)
 		}
 		// Proxy sidecar has no /workspace mount; exec must not chdir there.
 		if info.Container.Config.Labels[labelRole] == roleProxy {
@@ -265,9 +265,9 @@ func resizeExecOnce(ctx context.Context, cli *client.Client, execID string, inFd
 	})
 }
 
-// Delete removes sandbox container, proxy sidecar, cautem network, and data volume.
+// Delete removes sandbox container, proxy sidecar, quarshell network, and data volume.
 
-// EnsureSSHDaemon starts cautem-sshd as root on the relay socket
+// EnsureSSHDaemon starts quarshell-sshd as root on the relay socket
 // (idempotent: sshd exits when a live daemon already owns the socket) and
 // waits until the socket exists. Returns driver.ErrSSHDisabled for sandboxes
 // created without SSH.
@@ -333,9 +333,9 @@ func (d *Driver) containerLogText(ctx context.Context, id string) (string, error
 	return output.String(), nil
 }
 
-// rawExec runs argv as root without the cautem-init wrapper.
+// rawExec runs argv as root without the quarshell-init wrapper.
 
-// rawExec runs argv as root without the cautem-init wrapper.
+// rawExec runs argv as root without the quarshell-init wrapper.
 func (d *Driver) rawExec(ctx context.Context, id string, argv []string) (int, error) {
 	code, _, err := d.rawExecOutput(ctx, id, argv)
 	return code, err

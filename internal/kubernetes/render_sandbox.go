@@ -10,17 +10,17 @@ import (
 )
 
 const (
-	labelManagedBy              = "openshell.ai/managed-by"
-	labelSandboxID              = "openshell.ai/sandbox-id"
-	labelSandboxName            = "openshell.ai/sandbox-name"
-	labelSandboxWorkspace       = "openshell.ai/sandbox-workspace"
-	labelGatewayID              = "openshell.ai/gateway-id"
-	labelBoundaryPair           = "openshell.ai/boundary-pair"
-	labelBoundaryRole           = "openshell.ai/boundary-role"
-	annotationRuntimeGeneration = "openshell.ai/runtime-generation"
-	annotationCautemGatewayURL  = "cautem.ai/gateway-url"
-	annotationCautemGatewayRPC  = "cautem.ai/gateway-grpc-endpoint"
-	annotationCautemGatewayTLS  = "cautem.ai/gateway-tls"
+	labelManagedBy                = "openshell.ai/managed-by"
+	labelSandboxID                = "openshell.ai/sandbox-id"
+	labelSandboxName              = "openshell.ai/sandbox-name"
+	labelSandboxWorkspace         = "openshell.ai/sandbox-workspace"
+	labelGatewayID                = "openshell.ai/gateway-id"
+	labelBoundaryPair             = "openshell.ai/boundary-pair"
+	labelBoundaryRole             = "openshell.ai/boundary-role"
+	annotationRuntimeGeneration   = "openshell.ai/runtime-generation"
+	annotationQuarshellGatewayURL = "quarshell.ai/gateway-url"
+	annotationQuarshellGatewayRPC = "quarshell.ai/gateway-grpc-endpoint"
+	annotationQuarshellGatewayTLS = "quarshell.ai/gateway-tls"
 
 	managedByValue = "openshell"
 

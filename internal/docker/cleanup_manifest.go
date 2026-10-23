@@ -198,7 +198,7 @@ func cleanupManifestFromLabels(id string, labels map[string]string) (cleanupMani
 		SandboxName: name,
 		Network:     labels[labelNetwork],
 		DataVolume:  labels[labelVolume],
-		CAVolume:    labels["cautem.ca_volume"],
+		CAVolume:    labels["quarshell.ca_volume"],
 		SSHVolume:   labels[labelSSHVol],
 	}
 	if manifest.Network != "" && (strings.ContainsAny(manifest.Network, `/\\`) || strings.TrimSpace(manifest.Network) != manifest.Network) {

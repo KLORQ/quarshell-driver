@@ -36,7 +36,7 @@ func sdkFixtureDriver(t *testing.T, handler http.HandlerFunc) *Driver {
 	return NewFromClient(cli)
 }
 
-func TestDefaultSandboxImageUsesCautemBaseWhenNotCached(t *testing.T) {
+func TestDefaultSandboxImageUsesQuarshellBaseWhenNotCached(t *testing.T) {
 	d := sdkFixtureDriver(t, func(w http.ResponseWriter, r *http.Request) {
 		if strings.Contains(r.URL.Path, "/images/") {
 			w.WriteHeader(http.StatusNotFound)
@@ -68,16 +68,16 @@ func TestDefaultSandboxImageSelectsGUIWithGPU(t *testing.T) {
 
 func TestImageHasGUIRecognizesPublishedGUIImages(t *testing.T) {
 	for _, image := range []string{
-		"cautem-sandbox:gui",
-		"cautem-sandbox:gui-gpu",
-		"ghcr.io/cautem/cautem/sandboxes/gui:latest",
-		"ghcr.io/cautem/cautem/sandboxes/gui-gpu:latest",
+		"quarshell-sandbox:gui",
+		"quarshell-sandbox:gui-gpu",
+		"ghcr.io/quarshell/quarshell/sandboxes/gui:latest",
+		"ghcr.io/quarshell/quarshell/sandboxes/gui-gpu:latest",
 	} {
 		if !imageHasGUI(image) {
 			t.Errorf("imageHasGUI(%q) = false", image)
 		}
 	}
-	if imageHasGUI("ghcr.io/cautem/cautem/sandboxes/gpu:latest") {
+	if imageHasGUI("ghcr.io/quarshell/quarshell/sandboxes/gpu:latest") {
 		t.Fatal("compute-only GPU image was recognized as GUI")
 	}
 }
@@ -162,7 +162,7 @@ func TestLogsWithOptionsAppliesTailSinceAndProxySource(t *testing.T) {
 	d := sdkFixtureDriver(t, func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case "/v1.41/containers/container-id/json":
-			_, _ = io.WriteString(w, `{"Config":{"Labels":{"cautem.name":"demo"}},"Name":"/cautem-demo"}`)
+			_, _ = io.WriteString(w, `{"Config":{"Labels":{"quarshell.name":"demo"}},"Name":"/quarshell-demo"}`)
 		case "/v1.41/containers/quarshell-proxy-demo/json":
 			_, _ = io.WriteString(w, `{"Config":{"Labels":{}},"Name":"/quarshell-proxy-demo"}`)
 		case "/v1.41/containers/quarshell-proxy-demo/logs":
@@ -203,7 +203,7 @@ func TestEnsureNetworkRejectsExistingNonInternalProxyNetwork(t *testing.T) {
 		switch {
 		case strings.HasSuffix(r.URL.Path, "/networks/proxy-sandbox-risk") && r.Method == http.MethodGet:
 			w.Header().Set("Content-Type", "application/json")
-			_, _ = io.WriteString(w, `{"Id":"existing-network","Internal":false,"Labels":{"cautem.sandbox":"1","cautem.name":"risk"}}`)
+			_, _ = io.WriteString(w, `{"Id":"existing-network","Internal":false,"Labels":{"quarshell.sandbox":"1","quarshell.name":"risk"}}`)
 		case strings.HasSuffix(r.URL.Path, "/networks/create"):
 			createRequests++
 			w.WriteHeader(http.StatusCreated)
@@ -234,7 +234,7 @@ func TestEnsureNetworkReusesInternalProxyNetwork(t *testing.T) {
 			return
 		}
 		w.Header().Set("Content-Type", "application/json")
-		_, _ = io.WriteString(w, `{"Id":"internal-network","Internal":true,"EnableIPv6":true,"Labels":{"cautem.sandbox":"1","cautem.name":"safe"},"Options":{"com.docker.network.bridge.gateway_mode_ipv4":"isolated","com.docker.network.bridge.gateway_mode_ipv6":"isolated"}}`)
+		_, _ = io.WriteString(w, `{"Id":"internal-network","Internal":true,"EnableIPv6":true,"Labels":{"quarshell.sandbox":"1","quarshell.name":"safe"},"Options":{"com.docker.network.bridge.gateway_mode_ipv4":"isolated","com.docker.network.bridge.gateway_mode_ipv6":"isolated"}}`)
 	})
 	d.runtimeConfig.BackendID = "docker"
 	created, err := d.ensureNetwork(context.Background(), "proxy-sandbox-safe", "safe", true)
@@ -254,7 +254,7 @@ func TestEnsureNetworkRejectsOwnedInternalNetworkWithoutIPv6(t *testing.T) {
 			return
 		}
 		w.Header().Set("Content-Type", "application/json")
-		_, _ = io.WriteString(w, `{"Id":"owned-network","Name":"proxy-sandbox-no-ipv6","Internal":true,"Labels":{"cautem.sandbox":"1","cautem.name":"no-ipv6","cautem.role":"network"},"Options":{"com.docker.network.bridge.gateway_mode_ipv4":"isolated","com.docker.network.bridge.gateway_mode_ipv6":"isolated"}}`)
+		_, _ = io.WriteString(w, `{"Id":"owned-network","Name":"proxy-sandbox-no-ipv6","Internal":true,"Labels":{"quarshell.sandbox":"1","quarshell.name":"no-ipv6","quarshell.role":"network"},"Options":{"com.docker.network.bridge.gateway_mode_ipv4":"isolated","com.docker.network.bridge.gateway_mode_ipv6":"isolated"}}`)
 	})
 	d.runtimeConfig.BackendID = "docker"
 	if _, err := d.ensureNetwork(context.Background(), "proxy-sandbox-no-ipv6", "no-ipv6", true); err == nil || !strings.Contains(err.Error(), "does not enable IPv6") {
@@ -317,7 +317,7 @@ func TestEnsureNetworkCreatesDualStackIsolatedProxyNetwork(t *testing.T) {
 func TestCreateProxySidecarMountsUpstreamCredentialsOutsideSandbox(t *testing.T) {
 	authPath := filepath.Join(t.TempDir(), "auth")
 	caPath := filepath.Join(t.TempDir(), "ca.pem")
-	binPath := filepath.Join(t.TempDir(), "cautem")
+	binPath := filepath.Join(t.TempDir(), "quarshell")
 	policyPath := filepath.Join(t.TempDir(), "policy.yaml")
 	for path, data := range map[string]string{
 		authPath:   "robot:s3cret",
@@ -371,7 +371,7 @@ func TestCreateProxySidecarMountsUpstreamCredentialsOutsideSandbox(t *testing.T)
 		UpstreamProxyCABundle:          caPath,
 		UpstreamProxyConnectByHostname: true,
 	})
-	err = d.createProxySidecar(ctx, "fixture", "cautem-net-fixture", "proxy:latest", binPath, policyPath, 3128, "", "", "", nil, 0)
+	err = d.createProxySidecar(ctx, "fixture", "quarshell-net-fixture", "proxy:latest", binPath, policyPath, 3128, "", "", "", nil, 0)
 	if err == nil {
 		t.Fatal("proxy create unexpectedly reached readiness with canceled context")
 	}
@@ -380,9 +380,9 @@ func TestCreateProxySidecarMountsUpstreamCredentialsOutsideSandbox(t *testing.T)
 		t.Fatalf("proxy image=%q", created.Image)
 	}
 	for _, want := range []string{
-		"CAUTEM_PROXY_AUTH_FILE=/run/cautem/upstream-proxy/auth",
-		"CAUTEM_PROXY_CA_BUNDLE=/run/cautem/upstream-proxy/ca.pem",
-		"CAUTEM_PROXY_CONNECT_BY_HOSTNAME=true",
+		"QUARSHELL_PROXY_AUTH_FILE=/run/quarshell/upstream-proxy/auth",
+		"QUARSHELL_PROXY_CA_BUNDLE=/run/quarshell/upstream-proxy/ca.pem",
+		"QUARSHELL_PROXY_CONNECT_BY_HOSTNAME=true",
 		"NO_PROXY=localhost,.svc.cluster.local",
 	} {
 		if !containsEnvValue(created.Env, strings.SplitN(want, "=", 2)[0], strings.SplitN(want, "=", 2)[1]) {
@@ -395,7 +395,7 @@ func TestCreateProxySidecarMountsUpstreamCredentialsOutsideSandbox(t *testing.T)
 		}
 	}
 	joinedBinds := strings.Join(created.HostConfig.Binds, "\n")
-	for _, want := range []string{authPath + ":/run/cautem/upstream-proxy/auth:ro", caPath + ":/run/cautem/upstream-proxy/ca.pem:ro"} {
+	for _, want := range []string{authPath + ":/run/quarshell/upstream-proxy/auth:ro", caPath + ":/run/quarshell/upstream-proxy/ca.pem:ro"} {
 		if !strings.Contains(joinedBinds, want) {
 			t.Errorf("proxy bind missing %q: %v", want, created.HostConfig.Binds)
 		}
@@ -438,7 +438,7 @@ func TestSplitSDKCreateAndInspectEngineContract(t *testing.T) {
 		case r.URL.Path == "/v1.41/volumes/cache" && r.Method == http.MethodGet:
 			_, _ = io.WriteString(w, `{"Name":"cache","Driver":"local","Labels":{},"Options":{}}`)
 		case strings.Contains(r.URL.Path, "/networks/"):
-			_, _ = io.WriteString(w, `{"Id":"network-id","Labels":{"cautem.sandbox":"1","cautem.name":"sdk-fixture"}}`)
+			_, _ = io.WriteString(w, `{"Id":"network-id","Labels":{"quarshell.sandbox":"1","quarshell.name":"sdk-fixture"}}`)
 		case r.URL.Path == "/v1.41/containers/create":
 			if err := json.NewDecoder(r.Body).Decode(&created); err != nil {
 				t.Error(err)
@@ -449,11 +449,11 @@ func TestSplitSDKCreateAndInspectEngineContract(t *testing.T) {
 			w.WriteHeader(http.StatusCreated)
 			_, _ = io.WriteString(w, `{"Id":"container-id"}`)
 		case r.URL.Path == "/v1.41/containers/container-id/json":
-			_, _ = io.WriteString(w, `{"Id":"container-id","Name":"/quarshell-sdk-fixture","Config":{"Image":"busybox:latest","Labels":{"cautem.sandbox":"1","cautem.name":"sdk-fixture","cautem.network":"cautem-net-sdk-fixture"}},"State":{"Status":"running"},"NetworkSettings":{"Networks":{"cautem-net-sdk-fixture":{"IPAddress":"172.18.0.2"}}}}`)
+			_, _ = io.WriteString(w, `{"Id":"container-id","Name":"/quarshell-sdk-fixture","Config":{"Image":"busybox:latest","Labels":{"quarshell.sandbox":"1","quarshell.name":"sdk-fixture","quarshell.network":"quarshell-net-sdk-fixture"}},"State":{"Status":"running"},"NetworkSettings":{"Networks":{"quarshell-net-sdk-fixture":{"IPAddress":"172.18.0.2"}}}}`)
 		case r.URL.Path == "/v1.41/containers/sdk-fixture/json":
 			w.WriteHeader(http.StatusNotFound)
 		case r.URL.Path == "/v1.41/containers/quarshell-sdk-fixture/json":
-			_, _ = io.WriteString(w, `{"Id":"container-id","Name":"/quarshell-sdk-fixture","Config":{"Image":"busybox:latest","Labels":{"cautem.sandbox":"1","cautem.name":"sdk-fixture","cautem.network":"cautem-net-sdk-fixture"}},"State":{"Status":"running"},"NetworkSettings":{"Networks":{"cautem-net-sdk-fixture":{"IPAddress":"172.18.0.2"}}}}`)
+			_, _ = io.WriteString(w, `{"Id":"container-id","Name":"/quarshell-sdk-fixture","Config":{"Image":"busybox:latest","Labels":{"quarshell.sandbox":"1","quarshell.name":"sdk-fixture","quarshell.network":"quarshell-net-sdk-fixture"}},"State":{"Status":"running"},"NetworkSettings":{"Networks":{"quarshell-net-sdk-fixture":{"IPAddress":"172.18.0.2"}}}}`)
 		default:
 			t.Errorf("unexpected engine request: %s %s", r.Method, r.URL)
 			w.WriteHeader(http.StatusNotFound)
@@ -471,7 +471,7 @@ func TestSplitSDKCreateAndInspectEngineContract(t *testing.T) {
 	bindSource := t.TempDir()
 	ctx := context.Background()
 	driverConfigJSON := fmt.Sprintf(`{"cdi_devices":["nvidia.com/gpu=7"],"mounts":[{"type":"volume","source":"cache","target":"/cache"},{"type":"tmpfs","target":"/scratch","size_bytes":4096},{"type":"bind","source":%q,"target":"/host-data","read_only":true,"selinux_label":"shared"}]}`, bindSource)
-	handle, err := d.createSandbox(ctx, sandboxCreateSpec{Name: "sdk-fixture", Image: "cautem-sandbox:local", Workspace: t.TempDir(), Env: []string{"OPENSHELL_OCI_IMAGE_USER=spoofed", "OPENSHELL_SANDBOX_UID=0", "PATH=/usr/bin"}, Labels: map[string]string{"openshell.ai/sandbox-namespace": "spoofed"}, PublishPorts: []driver.PortPublish{{Host: 18080, Guest: 8080}}, DriverConfigJSON: driverConfigJSON})
+	handle, err := d.createSandbox(ctx, sandboxCreateSpec{Name: "sdk-fixture", Image: "quarshell-sandbox:local", Workspace: t.TempDir(), Env: []string{"OPENSHELL_OCI_IMAGE_USER=spoofed", "OPENSHELL_SANDBOX_UID=0", "PATH=/usr/bin"}, Labels: map[string]string{"openshell.ai/sandbox-namespace": "spoofed"}, PublishPorts: []driver.PortPublish{{Host: 18080, Guest: 8080}}, DriverConfigJSON: driverConfigJSON})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -574,26 +574,26 @@ func TestContainerIPDoesNotFallBackToAnotherNetwork(t *testing.T) {
 		}
 		_, _ = io.WriteString(w, `{"NetworkSettings":{"Networks":{"bridge":{"IPAddress":"172.18.0.2"}}}}`)
 	})
-	if ip, err := d.ContainerIP(context.Background(), "container-id", "cautem-net-fixture"); err == nil || ip != "" {
+	if ip, err := d.ContainerIP(context.Background(), "container-id", "quarshell-net-fixture"); err == nil || ip != "" {
 		t.Fatalf("container IP=%q err=%v; must fail closed when requested network has no IP", ip, err)
 	}
 }
 
 func TestStaticPodmanProxyIPUsesReservedAddressAfterGateway(t *testing.T) {
 	d := sdkFixtureDriver(t, func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/v1.41/networks/cautem-net-fixture" {
+		if r.URL.Path != "/v1.41/networks/quarshell-net-fixture" {
 			t.Errorf("unexpected engine request: %s %s", r.Method, r.URL)
 			http.NotFound(w, r)
 			return
 		}
 		w.Header().Set("Content-Type", "application/json")
-		_, _ = io.WriteString(w, `{"Id":"network-id","Name":"cautem-net-fixture","IPAM":{"Driver":"bridge","Config":[{"Subnet":"172.27.1.0/24","Gateway":"172.27.1.1"}]}}`)
+		_, _ = io.WriteString(w, `{"Id":"network-id","Name":"quarshell-net-fixture","IPAM":{"Driver":"bridge","Config":[{"Subnet":"172.27.1.0/24","Gateway":"172.27.1.1"}]}}`)
 	})
-	ip, err := d.staticPodmanProxyIP(context.Background(), "cautem-net-fixture")
+	ip, err := d.staticPodmanProxyIP(context.Background(), "quarshell-net-fixture")
 	if err != nil || ip.String() != "172.27.1.2" {
 		t.Fatalf("static Podman proxy IP=%q err=%v; want first host address after gateway", ip, err)
 	}
-	proxyIP, sandboxIP, err := d.staticPodmanNetworkIPs(context.Background(), "cautem-net-fixture")
+	proxyIP, sandboxIP, err := d.staticPodmanNetworkIPs(context.Background(), "quarshell-net-fixture")
 	if err != nil || proxyIP.String() != "172.27.1.2" || sandboxIP.String() != "172.27.1.3" {
 		t.Fatalf("static Podman network IPs=(%q, %q) err=%v; want proxy .2 and sandbox .3", proxyIP, sandboxIP, err)
 	}
@@ -609,7 +609,7 @@ func TestCreateRunsGoSupervisorAroundHardenedInit(t *testing.T) {
 		case strings.Contains(r.URL.Path, "/images/"):
 			_, _ = io.WriteString(w, `{"Id":"sha256:immutable-image-id","Config":{"User":"sandbox"}}`)
 		case strings.Contains(r.URL.Path, "/networks/"):
-			_, _ = io.WriteString(w, `{"Id":"network-id","Labels":{"cautem.sandbox":"1","cautem.name":"go-supervisor"}}`)
+			_, _ = io.WriteString(w, `{"Id":"network-id","Labels":{"quarshell.sandbox":"1","quarshell.name":"go-supervisor"}}`)
 		case r.URL.Path == "/v1.41/containers/create":
 			if err := json.NewDecoder(r.Body).Decode(&created); err != nil {
 				t.Error(err)
@@ -635,8 +635,8 @@ func TestCreateRunsGoSupervisorAroundHardenedInit(t *testing.T) {
 	}
 	_, err := d.createSandbox(context.Background(), sandboxCreateSpec{
 		Name: "go-supervisor", Image: "sandbox:local", Workspace: t.TempDir(),
-		Command: []string{"sleep", "infinity"}, InitBin: makeExecutable("cautem-init"), PolicyPath: policy,
-		SupervisorBin: makeExecutable("cautem-supervisor"), MainProcessRestartPolicy: "always", TTY: true,
+		Command: []string{"sleep", "infinity"}, InitBin: makeExecutable("quarshell-init"), PolicyPath: policy,
+		SupervisorBin: makeExecutable("quarshell-supervisor"), MainProcessRestartPolicy: "always", TTY: true,
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -660,20 +660,20 @@ func TestCreateRunsGoSupervisorAroundHardenedInit(t *testing.T) {
 	if err := json.Unmarshal(createdJSON, &config); err != nil {
 		t.Fatal(err)
 	}
-	if len(config.Entrypoint) != 1 || config.Entrypoint[0] != "/cautem/cautem-supervisor" || config.User != "0" {
+	if len(config.Entrypoint) != 1 || config.Entrypoint[0] != "/quarshell/quarshell-supervisor" || config.User != "0" {
 		t.Fatalf("container entrypoint/user=%v/%q, want Go supervisor PID 1 as root", config.Entrypoint, config.User)
 	}
 	if !config.TTY || !config.OpenStdin {
 		t.Fatalf("TTY sandbox config tty/openStdin=%v/%v, want both enabled", config.TTY, config.OpenStdin)
 	}
-	wantArgs := []string{"--", "/cautem/cautem-init", "--policy", "/cautem/policy.yaml", "--", "sleep", "infinity"}
+	wantArgs := []string{"--", "/quarshell/quarshell-init", "--policy", "/quarshell/policy.yaml", "--", "sleep", "infinity"}
 	if !slices.Equal(config.Cmd, wantArgs) {
 		t.Fatalf("Go supervisor command=%q, want %q", config.Cmd, wantArgs)
 	}
 	if !containsEnvValue(config.Env, driver.MainProcessRestartPolicyEnv, "always") {
 		t.Fatalf("container env does not carry the selected main process restart policy: %v", config.Env)
 	}
-	for _, want := range []string{"/cautem/cautem-supervisor:ro", "/cautem/cautem-init:ro", "/cautem/policy.yaml:ro"} {
+	for _, want := range []string{"/quarshell/quarshell-supervisor:ro", "/quarshell/quarshell-init:ro", "/quarshell/policy.yaml:ro"} {
 		found := false
 		for _, bind := range host.Binds {
 			if strings.HasSuffix(bind, want) {

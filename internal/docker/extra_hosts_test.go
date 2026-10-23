@@ -8,7 +8,7 @@ import (
 func TestHostGatewayExtraHosts(t *testing.T) {
 	got := HostGatewayExtraHosts()
 	want := []string{
-		"host.cautem.internal:host-gateway",
+		"host.quarshell.internal:host-gateway",
 		"host.docker.internal:host-gateway",
 	}
 	if !slices.Equal(got, want) {

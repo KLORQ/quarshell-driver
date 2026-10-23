@@ -174,7 +174,7 @@ func (backend *dynamicAgentSandboxCreateBackend) WaitForRuntimePodsReady(ctx con
 			if ctx.Err() != nil {
 				return ctx.Err()
 			}
-			return fmt.Errorf("timed out waiting for Cautem runtime Pods to become Ready")
+			return fmt.Errorf("timed out waiting for Quarshell runtime Pods to become Ready")
 		case <-ticker.C:
 		}
 	}
@@ -191,8 +191,8 @@ func podReadyCondition(pod *unstructured.Unstructured) bool {
 	return false
 }
 
-func (backend *dynamicAgentSandboxCreateBackend) ReadCautemGenerationSecrets(ctx context.Context, identity agentSandboxCreateIdentity) ([]map[string]any, error) {
-	if err := validateCautemSecretIdentity(identity); err != nil {
+func (backend *dynamicAgentSandboxCreateBackend) ReadQuarshellGenerationSecrets(ctx context.Context, identity agentSandboxCreateIdentity) ([]map[string]any, error) {
+	if err := validateQuarshellSecretIdentity(identity); err != nil {
 		return nil, err
 	}
 	resource, err := backend.namespacedResource(coreV1GVR("secrets"), identity.Namespace)
@@ -208,12 +208,12 @@ func (backend *dynamicAgentSandboxCreateBackend) ReadCautemGenerationSecrets(ctx
 	for _, name := range names {
 		secret, err := resource.Get(ctx, name, metav1.GetOptions{})
 		if err != nil {
-			return nil, fmt.Errorf("read Cautem runtime Secret %s: %w", name, err)
+			return nil, fmt.Errorf("read Quarshell runtime Secret %s: %w", name, err)
 		}
 		secrets = append(secrets, secret.Object)
 	}
-	if err := validateCautemGenerationSecrets(secrets, identity); err != nil {
-		return nil, fmt.Errorf("validate stored Cautem runtime Secrets: %w", err)
+	if err := validateQuarshellGenerationSecrets(secrets, identity); err != nil {
+		return nil, fmt.Errorf("validate stored Quarshell runtime Secrets: %w", err)
 	}
 	return secrets, nil
 }

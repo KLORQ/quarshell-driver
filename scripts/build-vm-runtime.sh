@@ -8,8 +8,8 @@ workspace_dir=$(CDPATH= cd -- "$module_dir/.." && pwd)
 runtime_module_dir="$workspace_dir/quarshell-runtime"
 vm_module_dir="$workspace_dir/quarshell-driver-vm"
 vm_control_protocol_file="$runtime_module_dir/supervisorcontrol/protocol_version.txt"
-output_dir=${CAUTEM_VM_BUILD_DIR:-"$module_dir/dist/vm"}
-guest_arch=${CAUTEM_VM_GUEST_ARCH:-$(go env GOARCH)}
+output_dir=${QUARSHELL_VM_BUILD_DIR:-"$module_dir/dist/vm"}
+guest_arch=${QUARSHELL_VM_GUEST_ARCH:-$(go env GOARCH)}
 host_os=$(go env GOOS)
 host_arch=$(go env GOARCH)
 
@@ -37,8 +37,8 @@ fi
 mkdir -p "$output_dir"
 output_dir=$(CDPATH= cd -- "$output_dir" && pwd)
 
-umoci_path=${CAUTEM_VM_UMOCI:-}
-umoci_sha256=${CAUTEM_VM_UMOCI_SHA256:-}
+umoci_path=${QUARSHELL_VM_UMOCI:-}
+umoci_sha256=${QUARSHELL_VM_UMOCI_SHA256:-}
 umoci_tmp=
 manifest_tmp=
 cleanup_umoci_tmp() {
@@ -57,42 +57,42 @@ trap 'cleanup_umoci_tmp; exit 143' TERM
 # any artifact so a failed build cannot leave a stale success marker.
 rm -f "$output_dir/vm-runtime-manifest.json"
 if [ -z "$umoci_path" ]; then
-  umoci_version=${CAUTEM_VM_UMOCI_VERSION:-v0.6.0}
+  umoci_version=${QUARSHELL_VM_UMOCI_VERSION:-v0.6.0}
   case "$guest_arch" in
     amd64) umoci_release_arch=amd64 ;;
     arm64) umoci_release_arch=arm64 ;;
   esac
-  umoci_path="$output_dir/cautem-vm-umoci-linux-$guest_arch"
+  umoci_path="$output_dir/quarshell-vm-umoci-linux-$guest_arch"
   if [ -z "$umoci_sha256" ]; then
     umoci_sha256=$(awk -v version="$umoci_version" -v arch="$guest_arch" '$1 == version && $2 == arch { print $3 }' "$script_dir/vm-runtime-artifacts.lock")
   fi
   case "$umoci_sha256" in
-    *[!0123456789abcdef]*|'') echo "no valid pinned umoci SHA-256 for $umoci_version/linux-$guest_arch; add it to vm-runtime-artifacts.lock or set CAUTEM_VM_UMOCI_SHA256" >&2; exit 1 ;;
+    *[!0123456789abcdef]*|'') echo "no valid pinned umoci SHA-256 for $umoci_version/linux-$guest_arch; add it to vm-runtime-artifacts.lock or set QUARSHELL_VM_UMOCI_SHA256" >&2; exit 1 ;;
   esac
   if [ "${#umoci_sha256}" -ne 64 ]; then
     echo "umoci SHA-256 must contain exactly 64 lowercase hexadecimal digits" >&2
     exit 1
   fi
-  umoci_tmp=$(mktemp "$output_dir/.cautem-vm-umoci.XXXXXX")
+  umoci_tmp=$(mktemp "$output_dir/.quarshell-vm-umoci.XXXXXX")
   umoci_url="https://github.com/opencontainers/umoci/releases/download/$umoci_version/umoci.linux.$umoci_release_arch"
   curl --fail --location --silent --show-error "$umoci_url" --output "$umoci_tmp"
 else
   if [ -z "$umoci_sha256" ]; then
-    echo "CAUTEM_VM_UMOCI_SHA256 is required when supplying CAUTEM_VM_UMOCI" >&2
+    echo "QUARSHELL_VM_UMOCI_SHA256 is required when supplying QUARSHELL_VM_UMOCI" >&2
     exit 1
   fi
   case "$umoci_sha256" in
-    *[!0123456789abcdef]*|'') echo "CAUTEM_VM_UMOCI_SHA256 must be lowercase hexadecimal" >&2; exit 1 ;;
+    *[!0123456789abcdef]*|'') echo "QUARSHELL_VM_UMOCI_SHA256 must be lowercase hexadecimal" >&2; exit 1 ;;
   esac
   if [ "${#umoci_sha256}" -ne 64 ]; then
-    echo "CAUTEM_VM_UMOCI_SHA256 must contain exactly 64 lowercase hexadecimal digits" >&2
+    echo "QUARSHELL_VM_UMOCI_SHA256 must contain exactly 64 lowercase hexadecimal digits" >&2
     exit 1
   fi
-  umoci_tmp=$(mktemp "$output_dir/.cautem-vm-umoci.XXXXXX")
+  umoci_tmp=$(mktemp "$output_dir/.quarshell-vm-umoci.XXXXXX")
   cp "$umoci_path" "$umoci_tmp"
 fi
 if [ ! -f "$umoci_path" ] || [ ! -x "$umoci_path" ] || [ -L "$umoci_path" ]; then
-  if [ -n "${CAUTEM_VM_UMOCI:-}" ]; then
+  if [ -n "${QUARSHELL_VM_UMOCI:-}" ]; then
     echo "guest umoci must be an executable regular file: $umoci_path" >&2
     exit 1
   fi
@@ -111,47 +111,47 @@ if [ "$actual_umoci_sha256" != "$umoci_sha256" ]; then
   exit 1
 fi
 chmod 0755 "$umoci_tmp"
-mv -f "$umoci_tmp" "$output_dir/cautem-vm-umoci-linux-$guest_arch"
+mv -f "$umoci_tmp" "$output_dir/quarshell-vm-umoci-linux-$guest_arch"
 umoci_tmp=
-umoci_path="$output_dir/cautem-vm-umoci-linux-$guest_arch"
+umoci_path="$output_dir/quarshell-vm-umoci-linux-$guest_arch"
 
 (
   cd "$module_dir"
-  CGO_ENABLED=0 go -C "$vm_module_dir" build -trimpath -o "$output_dir/cautem-vm-worker" ./cmd/cautem-vm-worker
+  CGO_ENABLED=0 go -C "$vm_module_dir" build -trimpath -o "$output_dir/quarshell-vm-worker" ./cmd/quarshell-vm-worker
 )
-for helper in cautem-init cautem-supervisor cautem-sshd; do
+for helper in quarshell-init quarshell-supervisor quarshell-sshd; do
   CGO_ENABLED=0 GOOS=linux GOARCH="$guest_arch" go -C "$runtime_module_dir" build \
     -trimpath -ldflags="-s -w" -o "$output_dir/$helper-linux-$guest_arch" "./cmd/$helper"
 done
 CGO_ENABLED=0 GOOS=linux GOARCH="$guest_arch" go -C "$vm_module_dir" build \
   -trimpath -ldflags="-s -w" \
-  -o "$output_dir/cautem-vm-security-probe-linux-$guest_arch" \
+  -o "$output_dir/quarshell-vm-security-probe-linux-$guest_arch" \
   ./vm/testdata/guest-security-probe
 CGO_ENABLED=0 GOOS=linux GOARCH="$guest_arch" go -C "$vm_module_dir" build \
   -trimpath -ldflags="-s -w" \
-  -o "$output_dir/cautem-vm-guest-agent-linux-$guest_arch" \
-  ./cmd/cautem-vm-guest-agent
-chmod 0755 "$output_dir/cautem-vm-worker" "$output_dir/cautem-vm-guest-agent-linux-$guest_arch" "$output_dir/cautem-vm-umoci-linux-$guest_arch"
-chmod 0755 "$output_dir/cautem-init-linux-$guest_arch" "$output_dir/cautem-supervisor-linux-$guest_arch" "$output_dir/cautem-sshd-linux-$guest_arch"
-chmod 0755 "$output_dir/cautem-vm-security-probe-linux-$guest_arch"
+  -o "$output_dir/quarshell-vm-guest-agent-linux-$guest_arch" \
+  ./cmd/quarshell-vm-guest-agent
+chmod 0755 "$output_dir/quarshell-vm-worker" "$output_dir/quarshell-vm-guest-agent-linux-$guest_arch" "$output_dir/quarshell-vm-umoci-linux-$guest_arch"
+chmod 0755 "$output_dir/quarshell-init-linux-$guest_arch" "$output_dir/quarshell-supervisor-linux-$guest_arch" "$output_dir/quarshell-sshd-linux-$guest_arch"
+chmod 0755 "$output_dir/quarshell-vm-security-probe-linux-$guest_arch"
 if [ "$host_os/$host_arch" = darwin/arm64 ]; then
-  codesign_identity=${CAUTEM_VM_CODESIGN_IDENTITY:--}
+  codesign_identity=${QUARSHELL_VM_CODESIGN_IDENTITY:--}
   codesign --force --sign "$codesign_identity" \
     --entitlements "$script_dir/vm-worker-entitlements.plist" \
-    "$output_dir/cautem-vm-worker"
-  expected_team_id=${CAUTEM_VM_WORKER_TEAM_ID:-}
+    "$output_dir/quarshell-vm-worker"
+  expected_team_id=${QUARSHELL_VM_WORKER_TEAM_ID:-}
   if [ -n "$expected_team_id" ]; then
-    codesign --verify --strict --verbose=2 "$output_dir/cautem-vm-worker"
-    signature_metadata=$(codesign -dv --verbose=4 "$output_dir/cautem-vm-worker" 2>&1)
+    codesign --verify --strict --verbose=2 "$output_dir/quarshell-vm-worker"
+    signature_metadata=$(codesign -dv --verbose=4 "$output_dir/quarshell-vm-worker" 2>&1)
     actual_team_id=$(printf '%s\n' "$signature_metadata" | sed -n 's/^TeamIdentifier=//p')
     if [ -z "$actual_team_id" ] || [ "$actual_team_id" = "not set" ] || [ "$actual_team_id" != "$expected_team_id" ]; then
-      echo "signed VM worker Team ID '$actual_team_id' does not match CAUTEM_VM_WORKER_TEAM_ID" >&2
+      echo "signed VM worker Team ID '$actual_team_id' does not match QUARSHELL_VM_WORKER_TEAM_ID" >&2
       exit 1
     fi
   fi
 fi
 
-artifacts="cautem-vm-worker cautem-vm-umoci-linux-$guest_arch cautem-vm-guest-agent-linux-$guest_arch cautem-init-linux-$guest_arch cautem-supervisor-linux-$guest_arch cautem-sshd-linux-$guest_arch cautem-vm-security-probe-linux-$guest_arch"
+artifacts="quarshell-vm-worker quarshell-vm-umoci-linux-$guest_arch quarshell-vm-guest-agent-linux-$guest_arch quarshell-init-linux-$guest_arch quarshell-supervisor-linux-$guest_arch quarshell-sshd-linux-$guest_arch quarshell-vm-security-probe-linux-$guest_arch"
 manifest_tmp=$(mktemp "$output_dir/.vm-runtime-manifest.XXXXXX")
 {
   printf '{\n  "schema_version": 1,\n  "vm_control_protocol": %s,\n  "host": "%s/%s",\n  "guest": "linux/%s",\n  "artifacts": [\n' "$vm_control_protocol" "$host_os" "$host_arch" "$guest_arch"

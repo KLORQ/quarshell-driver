@@ -323,7 +323,7 @@ func TestCompatSupervisorRenderBindsResourcesToSandboxUID(t *testing.T) {
 		t.Fatalf("proxy Service selector = %#v", proxySelector)
 	}
 	proxyPort := renderMap(t, renderList(t, proxySpec["ports"], "proxyService.spec.ports")[0], "proxyService.spec.ports[0]")
-	if proxyPort["port"] != cautemProxyListenPort || proxyPort["targetPort"] != cautemProxyListenPort {
+	if proxyPort["port"] != quarshellProxyListenPort || proxyPort["targetPort"] != quarshellProxyListenPort {
 		t.Fatalf("proxy Service port = %#v", proxyPort)
 	}
 }
@@ -417,7 +417,7 @@ func TestCompatRuntimeFenceBlocksWorkloadEgress(t *testing.T) {
 		t.Fatalf("workload control egress port = %#v", egressPort)
 	}
 	proxyEgressPort := renderMap(t, egressPorts[1], "workload proxy egress port")
-	if proxyEgressPort["port"] != cautemProxyListenPort || proxyEgressPort["protocol"] != "TCP" {
+	if proxyEgressPort["port"] != quarshellProxyListenPort || proxyEgressPort["protocol"] != "TCP" {
 		t.Fatalf("workload proxy egress port = %#v", proxyEgressPort)
 	}
 	dnsRule := renderMap(t, egress[1], "workload DNS egress rule")
@@ -471,7 +471,7 @@ func TestCompatRuntimeFenceBlocksWorkloadEgress(t *testing.T) {
 		t.Fatalf("supervisor control ingress peer = %#v", workloadLabels)
 	}
 	supervisorPorts := renderList(t, renderMap(t, supervisorIngress[0], "supervisor ingress rule")["ports"], "supervisor ingress ports")
-	if len(supervisorPorts) != 2 || renderMap(t, supervisorPorts[0], "supervisor control port")["port"] != supervisorControlPort || renderMap(t, supervisorPorts[1], "supervisor proxy port")["port"] != cautemProxyListenPort {
+	if len(supervisorPorts) != 2 || renderMap(t, supervisorPorts[0], "supervisor control port")["port"] != supervisorControlPort || renderMap(t, supervisorPorts[1], "supervisor proxy port")["port"] != quarshellProxyListenPort {
 		t.Fatalf("supervisor ingress ports = %#v; want control and proxy listeners", supervisorPorts)
 	}
 }

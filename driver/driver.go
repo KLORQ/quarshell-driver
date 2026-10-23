@@ -17,13 +17,13 @@ const SupervisorControlSocketName = "supervisor-control.sock"
 // WorkspaceLabel carries the Gateway-verified workspace identifier to compute
 // drivers. It is reserved for internal routing and tenancy boundaries; callers
 // must overwrite any user-provided value before opening a driver.
-const WorkspaceLabel = "cautem.internal/workspace"
+const WorkspaceLabel = "quarshell.internal/workspace"
 
 // GatewayIDLabel carries the trusted Gateway installation identity through
 // compute protocols that only preserve sandbox labels.
-const GatewayIDLabel = "cautem.internal/gateway-id"
+const GatewayIDLabel = "quarshell.internal/gateway-id"
 
-const MainProcessRestartPolicyEnv = "CAUTEM_MAIN_PROCESS_RESTART_POLICY"
+const MainProcessRestartPolicyEnv = "QUARSHELL_MAIN_PROCESS_RESTART_POLICY"
 
 func NormalizeMainProcessRestartPolicy(raw string) (string, error) {
 	switch strings.ToLower(strings.TrimSpace(raw)) {

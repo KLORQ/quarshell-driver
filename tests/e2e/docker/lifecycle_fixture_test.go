@@ -34,12 +34,12 @@ func TestDockerDriverLifecycleAgainstTestcontainersEngine(t *testing.T) {
 
 	engine := docker.NewFromClientWithRuntimeConfig(engineClient, docker.RuntimeConfig{
 		ImagePullPolicy:   "missing",
-		NetworkName:       "cautem-testcontainers",
+		NetworkName:       "quarshell-testcontainers",
 		AllowDriverConfig: true,
 		ResourceAdmission: &resourceadmission.Config{Enabled: false},
 	})
 	defer engine.Close()
-	for _, volume := range []string{"cautem-testcontainers-docker-data", "cautem-testcontainers-docker-readonly"} {
+	for _, volume := range []string{"quarshell-testcontainers-docker-data", "quarshell-testcontainers-docker-readonly"} {
 		if _, err := engineClient.VolumeCreate(ctx, client.VolumeCreateOptions{Name: volume}); err != nil {
 			t.Fatalf("create caller volume fixture %q: %v", volume, err)
 		}
@@ -57,8 +57,8 @@ func TestDockerDriverLifecycleAgainstTestcontainersEngine(t *testing.T) {
 			CPUCores: 0.25, MemoryBytes: 128 * 1024 * 1024, PIDs: 64,
 		},
 		Config: map[string]any{"mounts": []any{
-			map[string]any{"type": "volume", "source": "cautem-testcontainers-docker-data", "target": "/persist", "read_only": false},
-			map[string]any{"type": "volume", "source": "cautem-testcontainers-docker-readonly", "target": "/readonly", "read_only": true},
+			map[string]any{"type": "volume", "source": "quarshell-testcontainers-docker-data", "target": "/persist", "read_only": false},
+			map[string]any{"type": "volume", "source": "quarshell-testcontainers-docker-readonly", "target": "/readonly", "read_only": true},
 			map[string]any{"type": "tmpfs", "target": "/scratch", "size_bytes": float64(4096), "read_only": false},
 		}},
 	})
@@ -175,7 +175,7 @@ func TestDockerDriverBuildsImageFromDockerfileContext(t *testing.T) {
 	engine := docker.NewFromClient(engineClient)
 	defer engine.Close()
 
-	tag := fmt.Sprintf("cautem-e2e-build:%d", time.Now().UnixNano())
+	tag := fmt.Sprintf("quarshell-e2e-build:%d", time.Now().UnixNano())
 	defer func() {
 		_, _ = engineClient.ImageRemove(context.Background(), tag, client.ImageRemoveOptions{Force: true, PruneChildren: true})
 	}()
@@ -242,7 +242,7 @@ func TestDockerDriverRecoversAfterDaemonRestart(t *testing.T) {
 
 	engine := docker.NewFromClientWithRuntimeConfig(engineClient, docker.RuntimeConfig{
 		ImagePullPolicy: "missing",
-		NetworkName:     "cautem-testcontainers-recovery",
+		NetworkName:     "quarshell-testcontainers-recovery",
 	})
 	defer engine.Close()
 
@@ -327,7 +327,7 @@ func TestDockerMainProcessRestartPolicyLifecycle(t *testing.T) {
 		t.Fatalf("create Docker Engine client: %v", err)
 	}
 	defer engineClient.Close()
-	engine := docker.NewFromClientWithRuntimeConfig(engineClient, docker.RuntimeConfig{ImagePullPolicy: "missing", NetworkName: "cautem-restart-policy"})
+	engine := docker.NewFromClientWithRuntimeConfig(engineClient, docker.RuntimeConfig{ImagePullPolicy: "missing", NetworkName: "quarshell-restart-policy"})
 	defer engine.Close()
 	var handles []driver.Handle
 	defer func() {
@@ -377,10 +377,10 @@ func TestDockerMainProcessRestartPolicyLifecycle(t *testing.T) {
 		if err != nil {
 			t.Fatalf("read restart lifecycle logs: %v", err)
 		}
-		return strings.Count(string(data), "CAUTEM_RESTART_ATTEMPT")
+		return strings.Count(string(data), "QUARSHELL_RESTART_ATTEMPT")
 	}
 
-	never := create("restart-never", "never", []string{"sh", "-c", "echo CAUTEM_RESTART_ATTEMPT; exit 9"})
+	never := create("restart-never", "never", []string{"sh", "-c", "echo QUARSHELL_RESTART_ATTEMPT; exit 9"})
 	if err := engine.Start(ctx, never.ID); err != nil {
 		t.Fatalf("start never-policy sandbox: %v", err)
 	}
@@ -389,7 +389,7 @@ func TestDockerMainProcessRestartPolicyLifecycle(t *testing.T) {
 		t.Fatalf("never policy attempts=%d, want 1", got)
 	}
 
-	onFailure := create("restart-on-failure", "on-failure", []string{"sh", "-c", "echo CAUTEM_RESTART_ATTEMPT; exit 9"})
+	onFailure := create("restart-on-failure", "on-failure", []string{"sh", "-c", "echo QUARSHELL_RESTART_ATTEMPT; exit 9"})
 	if err := engine.Start(ctx, onFailure.ID); err != nil {
 		t.Fatalf("start on-failure sandbox: %v", err)
 	}
@@ -405,7 +405,7 @@ func TestDockerMainProcessRestartPolicyLifecycle(t *testing.T) {
 	}
 	waitForExit(onFailure.ID, 9)
 
-	always := create("restart-always", "always", []string{"sh", "-c", "echo CAUTEM_RESTART_ATTEMPT; trap 'exit 0' TERM; sleep 60"})
+	always := create("restart-always", "always", []string{"sh", "-c", "echo QUARSHELL_RESTART_ATTEMPT; trap 'exit 0' TERM; sleep 60"})
 	if err := engine.Start(ctx, always.ID); err != nil {
 		t.Fatalf("start always-policy sandbox: %v", err)
 	}

@@ -11,7 +11,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/validation"
 )
 
-const internalGatewayIDConfigKey = "cautem_internal_gateway_id"
+const internalGatewayIDConfigKey = "quarshell_internal_gateway_id"
 
 // BackendConfig contains operator-owned Kubernetes runtime settings. Per-sandbox
 // driver_config remains limited to workload resources, PVC mounts, and Pod
@@ -106,19 +106,19 @@ func BackendConfigFromMap(values map[string]any) (BackendConfig, error) {
 
 func BackendConfigFromEnvironment() BackendConfig {
 	config := BackendConfig{
-		GatewayID:                     strings.TrimSpace(os.Getenv("CAUTEM_GATEWAY_ID")),
-		DefaultImage:                  strings.TrimSpace(os.Getenv("CAUTEM_KUBERNETES_DEFAULT_IMAGE")),
-		ProxyImage:                    strings.TrimSpace(os.Getenv("CAUTEM_KUBERNETES_PROXY_IMAGE")),
-		SandboxRuntimeImage:           strings.TrimSpace(os.Getenv("CAUTEM_KUBERNETES_RUNTIME_IMAGE")),
-		GRPCEndpoint:                  strings.TrimSpace(os.Getenv("CAUTEM_KUBERNETES_GRPC_ENDPOINT")),
-		GuestTLSCA:                    strings.TrimSpace(os.Getenv("CAUTEM_KUBERNETES_GUEST_TLS_CA")),
-		GuestTLSCert:                  strings.TrimSpace(os.Getenv("CAUTEM_KUBERNETES_GUEST_TLS_CERT")),
-		GuestTLSKey:                   strings.TrimSpace(os.Getenv("CAUTEM_KUBERNETES_GUEST_TLS_KEY")),
-		ServiceAccountName:            strings.TrimSpace(os.Getenv("CAUTEM_KUBERNETES_SERVICE_ACCOUNT")),
-		WorkspaceStorageClass:         strings.TrimSpace(os.Getenv("CAUTEM_KUBERNETES_STORAGE_CLASS")),
-		ProxyImagePullPolicy:          strings.TrimSpace(os.Getenv("CAUTEM_KUBERNETES_PROXY_IMAGE_PULL_POLICY")),
-		SandboxRuntimeImagePullPolicy: strings.TrimSpace(os.Getenv("CAUTEM_KUBERNETES_RUNTIME_IMAGE_PULL_POLICY")),
-		WorkspaceStorageSize:          strings.TrimSpace(os.Getenv("CAUTEM_KUBERNETES_STORAGE_SIZE")),
+		GatewayID:                     strings.TrimSpace(os.Getenv("QUARSHELL_GATEWAY_ID")),
+		DefaultImage:                  strings.TrimSpace(os.Getenv("QUARSHELL_KUBERNETES_DEFAULT_IMAGE")),
+		ProxyImage:                    strings.TrimSpace(os.Getenv("QUARSHELL_KUBERNETES_PROXY_IMAGE")),
+		SandboxRuntimeImage:           strings.TrimSpace(os.Getenv("QUARSHELL_KUBERNETES_RUNTIME_IMAGE")),
+		GRPCEndpoint:                  strings.TrimSpace(os.Getenv("QUARSHELL_KUBERNETES_GRPC_ENDPOINT")),
+		GuestTLSCA:                    strings.TrimSpace(os.Getenv("QUARSHELL_KUBERNETES_GUEST_TLS_CA")),
+		GuestTLSCert:                  strings.TrimSpace(os.Getenv("QUARSHELL_KUBERNETES_GUEST_TLS_CERT")),
+		GuestTLSKey:                   strings.TrimSpace(os.Getenv("QUARSHELL_KUBERNETES_GUEST_TLS_KEY")),
+		ServiceAccountName:            strings.TrimSpace(os.Getenv("QUARSHELL_KUBERNETES_SERVICE_ACCOUNT")),
+		WorkspaceStorageClass:         strings.TrimSpace(os.Getenv("QUARSHELL_KUBERNETES_STORAGE_CLASS")),
+		ProxyImagePullPolicy:          strings.TrimSpace(os.Getenv("QUARSHELL_KUBERNETES_PROXY_IMAGE_PULL_POLICY")),
+		SandboxRuntimeImagePullPolicy: strings.TrimSpace(os.Getenv("QUARSHELL_KUBERNETES_RUNTIME_IMAGE_PULL_POLICY")),
+		WorkspaceStorageSize:          strings.TrimSpace(os.Getenv("QUARSHELL_KUBERNETES_STORAGE_SIZE")),
 	}
 	config.applyDefaults()
 	return config
@@ -147,7 +147,7 @@ func (config *BackendConfig) applyDefaults() {
 		config.ControlGID = 10001
 	}
 	if config.BoundaryPort == 0 {
-		config.BoundaryPort = cautemWorkloadBoundaryPort
+		config.BoundaryPort = quarshellWorkloadBoundaryPort
 	}
 	if config.WorkspaceStorageSize == "" {
 		config.WorkspaceStorageSize = defaultWorkspaceStorage

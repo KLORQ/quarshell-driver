@@ -31,7 +31,7 @@ func TestPodmanCanonicalMainProcessTTYLifecycle(t *testing.T) {
 	t.Setenv("DOCKER_HOST", endpoint)
 	engine, err := podman.NewWithConfig(podman.Config{
 		ImagePullPolicy:         "missing",
-		NetworkName:             "cautem-podman-main-tty",
+		NetworkName:             "quarshell-podman-main-tty",
 		HealthCheckIntervalSecs: 0,
 		UsernsMode:              "host",
 	})
@@ -42,7 +42,7 @@ func TestPodmanCanonicalMainProcessTTYLifecycle(t *testing.T) {
 	name := "testcontainers-podman-main-tty"
 	handle, err := engine.Create(ctx, backendRequestFromSpec(sandboxFixtureSpec{
 		Name: name, Image: testenv.AlpineImage, Workspace: workspace,
-		Command: []string{"sh", "-c", "read value; printf 'CAUTEM_PODMAN_TTY_REPLY:%s\\n' \"$value\"; exit 7"},
+		Command: []string{"sh", "-c", "read value; printf 'QUARSHELL_PODMAN_TTY_REPLY:%s\\n' \"$value\"; exit 7"},
 		TTY:     true, NoHarden: true,
 	}))
 	if err != nil {
@@ -68,7 +68,7 @@ func TestPodmanCanonicalMainProcessTTYLifecycle(t *testing.T) {
 		_, err := io.Copy(&output, session)
 		outputDone <- err
 	}()
-	if _, err := io.WriteString(session, "cautem-podman-input\n"); err != nil {
+	if _, err := io.WriteString(session, "quarshell-podman-input\n"); err != nil {
 		_ = session.Close()
 		t.Fatalf("write Podman TTY input: %v", err)
 	}
@@ -84,7 +84,7 @@ func TestPodmanCanonicalMainProcessTTYLifecycle(t *testing.T) {
 	if waitErr != nil || code != 7 {
 		t.Fatalf("Podman TTY main-process exit=%d err=%v, want exit 7", code, waitErr)
 	}
-	if !strings.Contains(output.String(), "CAUTEM_PODMAN_TTY_REPLY:cautem-podman-input") {
+	if !strings.Contains(output.String(), "QUARSHELL_PODMAN_TTY_REPLY:quarshell-podman-input") {
 		t.Fatalf("Podman TTY output=%q; main-process reply missing", output.String())
 	}
 }
@@ -98,7 +98,7 @@ func TestPodmanDriverLifecycleAgainstTestcontainersEngine(t *testing.T) {
 		t.Fatalf("create Podman API client: %v", err)
 	}
 	defer engineClient.Close()
-	for _, volume := range []string{"cautem-testcontainers-podman-data", "cautem-testcontainers-podman-readonly"} {
+	for _, volume := range []string{"quarshell-testcontainers-podman-data", "quarshell-testcontainers-podman-readonly"} {
 		if _, err := engineClient.VolumeCreate(ctx, client.VolumeCreateOptions{Name: volume}); err != nil {
 			t.Fatalf("create caller volume fixture %q: %v", volume, err)
 		}
@@ -109,7 +109,7 @@ func TestPodmanDriverLifecycleAgainstTestcontainersEngine(t *testing.T) {
 
 	engine, err := podman.NewWithConfig(podman.Config{
 		ImagePullPolicy:         "missing",
-		NetworkName:             "cautem-testcontainers",
+		NetworkName:             "quarshell-testcontainers",
 		HealthCheckIntervalSecs: 0,
 		UsernsMode:              "host",
 		AllowDriverConfig:       true,
@@ -129,7 +129,7 @@ func TestPodmanDriverLifecycleAgainstTestcontainersEngine(t *testing.T) {
 		CPU:              0.25,
 		MemoryBytes:      128 * 1024 * 1024,
 		PidsLimit:        64,
-		DriverConfigJSON: `{"mounts":[{"type":"volume","source":"cautem-testcontainers-podman-data","target":"/persist","read_only":false},{"type":"volume","source":"cautem-testcontainers-podman-readonly","target":"/readonly","read_only":true},{"type":"tmpfs","target":"/scratch","size_bytes":4096,"read_only":false}]}`,
+		DriverConfigJSON: `{"mounts":[{"type":"volume","source":"quarshell-testcontainers-podman-data","target":"/persist","read_only":false},{"type":"volume","source":"quarshell-testcontainers-podman-readonly","target":"/readonly","read_only":true},{"type":"tmpfs","target":"/scratch","size_bytes":4096,"read_only":false}]}`,
 	}))
 	if err != nil {
 		t.Fatalf("create sandbox through Podman driver: %v", err)
@@ -229,7 +229,7 @@ func TestPodmanDriverRecoversAfterServiceRestart(t *testing.T) {
 	defer api.Close()
 	engine, err := podman.NewWithConfig(podman.Config{
 		ImagePullPolicy:         "missing",
-		NetworkName:             "cautem-testcontainers-recovery",
+		NetworkName:             "quarshell-testcontainers-recovery",
 		HealthCheckIntervalSecs: 0,
 		UsernsMode:              "host",
 	})
@@ -294,15 +294,15 @@ func TestPodmanDriverRecoversAfterServiceRestart(t *testing.T) {
 }
 
 func TestPodmanRootlessServiceRecovery(t *testing.T) {
-	if os.Getenv("CAUTEM_PODMAN_ROOTLESS") != "1" {
+	if os.Getenv("QUARSHELL_PODMAN_ROOTLESS") != "1" {
 		t.Skip("rootless Podman service lane is not enabled")
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 	defer cancel()
-	workspace := strings.TrimSpace(os.Getenv("CAUTEM_PODMAN_WORKSPACE"))
-	image := strings.TrimSpace(os.Getenv("CAUTEM_E2E_SANDBOX_IMAGE"))
+	workspace := strings.TrimSpace(os.Getenv("QUARSHELL_PODMAN_WORKSPACE"))
+	image := strings.TrimSpace(os.Getenv("QUARSHELL_E2E_SANDBOX_IMAGE"))
 	if workspace == "" || image == "" {
-		t.Fatal("CAUTEM_PODMAN_WORKSPACE and CAUTEM_E2E_SANDBOX_IMAGE are required")
+		t.Fatal("QUARSHELL_PODMAN_WORKSPACE and QUARSHELL_E2E_SANDBOX_IMAGE are required")
 	}
 
 	api, err := client.New(client.FromEnv)
@@ -312,7 +312,7 @@ func TestPodmanRootlessServiceRecovery(t *testing.T) {
 	defer api.Close()
 	engine, err := podman.NewWithConfig(podman.Config{
 		ImagePullPolicy:         "missing",
-		NetworkName:             "cautem-rootless-recovery",
+		NetworkName:             "quarshell-rootless-recovery",
 		HealthCheckIntervalSecs: 0,
 		UsernsMode:              "host",
 	})
@@ -376,19 +376,19 @@ func TestPodmanRootlessServiceRecovery(t *testing.T) {
 }
 
 func TestPodmanRootlessDriverLifecycle(t *testing.T) {
-	if os.Getenv("CAUTEM_PODMAN_ROOTLESS") != "1" {
+	if os.Getenv("QUARSHELL_PODMAN_ROOTLESS") != "1" {
 		t.Skip("rootless Podman service lane is not enabled")
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Minute)
 	defer cancel()
-	workspace := strings.TrimSpace(os.Getenv("CAUTEM_PODMAN_WORKSPACE"))
-	image := strings.TrimSpace(os.Getenv("CAUTEM_E2E_SANDBOX_IMAGE"))
+	workspace := strings.TrimSpace(os.Getenv("QUARSHELL_PODMAN_WORKSPACE"))
+	image := strings.TrimSpace(os.Getenv("QUARSHELL_E2E_SANDBOX_IMAGE"))
 	if workspace == "" || image == "" {
-		t.Fatal("CAUTEM_PODMAN_WORKSPACE and CAUTEM_E2E_SANDBOX_IMAGE are required")
+		t.Fatal("QUARSHELL_PODMAN_WORKSPACE and QUARSHELL_E2E_SANDBOX_IMAGE are required")
 	}
 	engine, err := podman.NewWithConfig(podman.Config{
 		ImagePullPolicy:         "missing",
-		NetworkName:             "cautem-rootless-lifecycle",
+		NetworkName:             "quarshell-rootless-lifecycle",
 		HealthCheckIntervalSecs: 0,
 		UsernsMode:              "keep-id",
 	})
@@ -492,7 +492,7 @@ func TestPodmanMainProcessRestartPolicyLifecycle(t *testing.T) {
 		t.Fatalf("create Podman API client: %v", err)
 	}
 	defer api.Close()
-	engine, err := podman.NewWithConfig(podman.Config{ImagePullPolicy: "missing", NetworkName: "cautem-restart-policy", HealthCheckIntervalSecs: 0, UsernsMode: "host"})
+	engine, err := podman.NewWithConfig(podman.Config{ImagePullPolicy: "missing", NetworkName: "quarshell-restart-policy", HealthCheckIntervalSecs: 0, UsernsMode: "host"})
 	if err != nil {
 		t.Fatalf("create Podman driver: %v", err)
 	}
@@ -543,10 +543,10 @@ func TestPodmanMainProcessRestartPolicyLifecycle(t *testing.T) {
 		if err != nil {
 			t.Fatalf("read restart lifecycle logs: %v", err)
 		}
-		return strings.Count(string(data), "CAUTEM_RESTART_ATTEMPT")
+		return strings.Count(string(data), "QUARSHELL_RESTART_ATTEMPT")
 	}
 
-	never := create("restart-never", "never", []string{"sh", "-c", "echo CAUTEM_RESTART_ATTEMPT; exit 9"})
+	never := create("restart-never", "never", []string{"sh", "-c", "echo QUARSHELL_RESTART_ATTEMPT; exit 9"})
 	if err := engine.Start(ctx, never.ID); err != nil {
 		t.Fatalf("start never-policy sandbox: %v", err)
 	}
@@ -555,7 +555,7 @@ func TestPodmanMainProcessRestartPolicyLifecycle(t *testing.T) {
 		t.Fatalf("never policy attempts=%d, want 1", got)
 	}
 
-	onFailure := create("restart-on-failure", "on-failure", []string{"sh", "-c", "echo CAUTEM_RESTART_ATTEMPT; exit 9"})
+	onFailure := create("restart-on-failure", "on-failure", []string{"sh", "-c", "echo QUARSHELL_RESTART_ATTEMPT; exit 9"})
 	if err := engine.Start(ctx, onFailure.ID); err != nil {
 		t.Fatalf("start on-failure sandbox: %v", err)
 	}
@@ -571,7 +571,7 @@ func TestPodmanMainProcessRestartPolicyLifecycle(t *testing.T) {
 	}
 	waitForExit(onFailure.ID, 9)
 
-	always := create("restart-always", "always", []string{"sh", "-c", "echo CAUTEM_RESTART_ATTEMPT; trap 'exit 0' TERM; sleep 60"})
+	always := create("restart-always", "always", []string{"sh", "-c", "echo QUARSHELL_RESTART_ATTEMPT; trap 'exit 0' TERM; sleep 60"})
 	if err := engine.Start(ctx, always.ID); err != nil {
 		t.Fatalf("start always-policy sandbox: %v", err)
 	}
@@ -590,13 +590,13 @@ func TestPodmanMainProcessRestartPolicyLifecycle(t *testing.T) {
 // route required by proxy-backed sandboxes, but that limitation must not hide
 // the identity contract we can verify on the same daemon.
 func TestPodmanUsernsMatrixE2E(t *testing.T) {
-	if os.Getenv("CAUTEM_PODMAN_USERNS_E2E") != "1" {
-		t.Skip("set CAUTEM_PODMAN_USERNS_E2E=1 to run the Podman userns matrix")
+	if os.Getenv("QUARSHELL_PODMAN_USERNS_E2E") != "1" {
+		t.Skip("set QUARSHELL_PODMAN_USERNS_E2E=1 to run the Podman userns matrix")
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 	defer cancel()
-	workspace := strings.TrimSpace(os.Getenv("CAUTEM_PODMAN_WORKSPACE"))
-	image := strings.TrimSpace(os.Getenv("CAUTEM_E2E_SANDBOX_IMAGE"))
+	workspace := strings.TrimSpace(os.Getenv("QUARSHELL_PODMAN_WORKSPACE"))
+	image := strings.TrimSpace(os.Getenv("QUARSHELL_E2E_SANDBOX_IMAGE"))
 	endpoint := strings.TrimSpace(os.Getenv("DOCKER_HOST"))
 	if endpoint == "" {
 		fixtureCtx := testenv.RequireContainers(t)
@@ -604,10 +604,10 @@ func TestPodmanUsernsMatrixE2E(t *testing.T) {
 		t.Setenv("DOCKER_HOST", endpoint)
 	}
 	if workspace == "" || image == "" {
-		t.Fatal("Podman userns matrix requires a workspace and CAUTEM_E2E_SANDBOX_IMAGE")
+		t.Fatal("Podman userns matrix requires a workspace and QUARSHELL_E2E_SANDBOX_IMAGE")
 	}
-	rootless := os.Getenv("CAUTEM_PODMAN_ROOTLESS") == "1"
-	strict := os.Getenv("CAUTEM_PODMAN_USERNS_STRICT") == "1"
+	rootless := os.Getenv("QUARSHELL_PODMAN_ROOTLESS") == "1"
+	strict := os.Getenv("QUARSHELL_PODMAN_USERNS_STRICT") == "1"
 	for _, mode := range []string{"private", "auto", "host", "keep-id", "no-map"} {
 		t.Run(mode, func(t *testing.T) {
 			if rootless && mode == "private" {
@@ -704,9 +704,9 @@ mapped_gid=$(awk -v id="$gid" '$1 <= id && id < $1 + $3 { print $2 + id - $1; fo
 			}
 			expectedUID, expectedGID := mappedUID, mappedGID
 			if rootless {
-				subordinateStart, err := strconv.ParseUint(os.Getenv("CAUTEM_PODMAN_ROOTLESS_SUBUID_START"), 10, 32)
+				subordinateStart, err := strconv.ParseUint(os.Getenv("QUARSHELL_PODMAN_ROOTLESS_SUBUID_START"), 10, 32)
 				if err != nil || subordinateStart == 0 {
-					t.Fatalf("rootless userns ownership probe requires a valid CAUTEM_PODMAN_ROOTLESS_SUBUID_START: %v", err)
+					t.Fatalf("rootless userns ownership probe requires a valid QUARSHELL_PODMAN_ROOTLESS_SUBUID_START: %v", err)
 				}
 				expectedUID = rootlessHostID(mode, mappedUID, subordinateStart)
 				expectedGID = rootlessHostID(mode, mappedGID, subordinateStart)

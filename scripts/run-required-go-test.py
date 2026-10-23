@@ -74,7 +74,7 @@ def main(argv: list[str]) -> int:
 	if not required or not command:
 		print("at least one required test and a command are required", file=sys.stderr)
 		return 2
-	json_log = os.environ.get("CAUTEM_VM_TEST_JSON_LOG", "").strip()
+	json_log = os.environ.get("QUARSHELL_VM_TEST_JSON_LOG", "").strip()
 	json_log_file = None
 	if json_log:
 		try:

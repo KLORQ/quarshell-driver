@@ -19,11 +19,11 @@ func InstallSupervisorHelpers(ctx context.Context, t *testing.T, daemon interfac
 	CopyFileToContainer(context.Context, string, string, int64) error
 }) (supervisorPath, initPath string) {
 	t.Helper()
-	helperDir := strings.TrimSpace(os.Getenv("CAUTEM_TEST_RUNTIME_HELPER_DIR"))
+	helperDir := strings.TrimSpace(os.Getenv("QUARSHELL_TEST_RUNTIME_HELPER_DIR"))
 	if helperDir == "" {
-		t.Skip("set CAUTEM_TEST_RUNTIME_HELPER_DIR to Linux cautem helper binaries for restart-policy acceptance")
+		t.Skip("set QUARSHELL_TEST_RUNTIME_HELPER_DIR to Linux quarshell helper binaries for restart-policy acceptance")
 	}
-	for _, name := range []string{"cautem-supervisor", "cautem-init"} {
+	for _, name := range []string{"quarshell-supervisor", "quarshell-init"} {
 		source := filepath.Join(helperDir, name)
 		info, err := os.Stat(source)
 		if err != nil || !info.Mode().IsRegular() || info.Mode().Perm()&0o111 == 0 {
@@ -33,7 +33,7 @@ func InstallSupervisorHelpers(ctx context.Context, t *testing.T, daemon interfac
 			t.Fatalf("copy runtime helper into engine fixture: %v", err)
 		}
 	}
-	return filepath.Join(helperDir, "cautem-supervisor"), filepath.Join(helperDir, "cautem-init")
+	return filepath.Join(helperDir, "quarshell-supervisor"), filepath.Join(helperDir, "quarshell-init")
 }
 
 func InstallSupervisorTestPolicy(ctx context.Context, t *testing.T, daemon interface {
@@ -55,8 +55,8 @@ func BuildSandboxImage(ctx context.Context, t *testing.T, daemon interface {
 	Exec(context.Context, []string, ...containerexec.ProcessOption) (int, io.Reader, error)
 }, builder []string) string {
 	t.Helper()
-	const image = "cautem-restart-acceptance:latest"
-	contextDir := "/tmp/cautem-restart-image"
+	const image = "quarshell-restart-acceptance:latest"
+	contextDir := "/tmp/quarshell-restart-image"
 	if _, _, err := daemon.Exec(ctx, []string{"mkdir", "-p", contextDir}); err != nil {
 		t.Fatalf("create sandbox image build context: %v", err)
 	}

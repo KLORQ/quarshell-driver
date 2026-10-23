@@ -55,8 +55,8 @@ func validateSuspendedAgentSandboxResource(resource map[string]any, params agent
 	if !onlyBootstrapSchedulingGate(podSpec) {
 		return fmt.Errorf("agent Sandbox workload Pod template is missing the bootstrap scheduling gate")
 	}
-	if params.CautemProxyImage != "" {
-		return validateCautemSuspendedAgentSandboxPod(podSpec, params)
+	if params.QuarshellProxyImage != "" {
+		return validateQuarshellSuspendedAgentSandboxPod(podSpec, params)
 	}
 	secretName := generationSecretName("os-sandbox", params.SandboxID, params.Generation)
 	if !podHasSecretReference(podSpec, secretName) {
@@ -84,49 +84,49 @@ func validateSuspendedAgentSandboxResource(resource map[string]any, params agent
 	return nil
 }
 
-func validateCautemSuspendedAgentSandboxPod(podSpec map[string]any, params agentSandboxRuntimeRenderParams) error {
+func validateQuarshellSuspendedAgentSandboxPod(podSpec map[string]any, params agentSandboxRuntimeRenderParams) error {
 	containers := sliceValue(podSpec["containers"])
-	if len(containers) != 2 || namedContainer(podSpec, "containers", "agent") == nil || namedContainer(podSpec, "containers", cautemWorkloadSSHDName) == nil {
-		return fmt.Errorf("cautem workload Pod must contain exactly the agent and relay-only sshd containers")
+	if len(containers) != 2 || namedContainer(podSpec, "containers", "agent") == nil || namedContainer(podSpec, "containers", quarshellWorkloadSSHDName) == nil {
+		return fmt.Errorf("quarshell workload Pod must contain exactly the agent and relay-only sshd containers")
 	}
 	if podSpec["dnsPolicy"] != "ClusterFirst" {
-		return fmt.Errorf("cautem workload Pod must use cluster DNS for paired Service discovery")
+		return fmt.Errorf("quarshell workload Pod must use cluster DNS for paired Service discovery")
 	}
 	secretName := generationSecretName("os-sandbox", params.SandboxID, params.Generation)
-	if podSecretReference(podSpec, cautemWorkloadCredentialName) != secretName {
-		return fmt.Errorf("cautem workload Pod template does not reference its generation credential Secret")
+	if podSecretReference(podSpec, quarshellWorkloadCredentialName) != secretName {
+		return fmt.Errorf("quarshell workload Pod template does not reference its generation credential Secret")
 	}
 	if podHasProjectedServiceAccountToken(podSpec) || podReferencesSupervisorSecret(podSpec) {
-		return fmt.Errorf("cautem workload Pod must not project a ServiceAccount token or reference supervisor credentials")
+		return fmt.Errorf("quarshell workload Pod must not project a ServiceAccount token or reference supervisor credentials")
 	}
 	podSecurity, _ := podSpec["securityContext"].(map[string]any)
 	seccomp, _ := podSecurity["seccompProfile"].(map[string]any)
 	if podSecurity["runAsNonRoot"] != true || seccomp["type"] != "RuntimeDefault" {
-		return fmt.Errorf("cautem workload Pod must use non-root RuntimeDefault seccomp")
+		return fmt.Errorf("quarshell workload Pod must use non-root RuntimeDefault seccomp")
 	}
 	agent := namedContainer(podSpec, "containers", "agent")
-	if agent == nil || containerHasGatewayCredentialEnv(agent) || !containerMountsVolume(agent, cautemWorkloadCredentialName) || !containerHasRequiredSecurity(agent) {
-		return fmt.Errorf("cautem workload container violates its credential mount or runtime security contract")
+	if agent == nil || containerHasGatewayCredentialEnv(agent) || !containerMountsVolume(agent, quarshellWorkloadCredentialName) || !containerHasRequiredSecurity(agent) {
+		return fmt.Errorf("quarshell workload container violates its credential mount or runtime security contract")
 	}
-	if containerHasRawCautemTokenEnv(agent) {
-		return fmt.Errorf("cautem workload container must not receive the gateway bearer token")
+	if containerHasRawQuarshellTokenEnv(agent) {
+		return fmt.Errorf("quarshell workload container must not receive the gateway bearer token")
 	}
-	if anyInitContainerMountsVolume(podSpec, cautemWorkloadCredentialName) {
-		return fmt.Errorf("cautem trusted init containers must not mount workload credentials")
+	if anyInitContainerMountsVolume(podSpec, quarshellWorkloadCredentialName) {
+		return fmt.Errorf("quarshell trusted init containers must not mount workload credentials")
 	}
-	helperInit := namedContainer(podSpec, "initContainers", cautemWorkloadRuntimeInit)
+	helperInit := namedContainer(podSpec, "initContainers", quarshellWorkloadRuntimeInit)
 	if helperInit == nil || !containerHasRequiredSecurity(helperInit) {
-		return fmt.Errorf("cautem runtime helper init must use the required container security context")
+		return fmt.Errorf("quarshell runtime helper init must use the required container security context")
 	}
-	sshd := namedContainer(podSpec, "containers", cautemWorkloadSSHDName)
-	if !containerHasRequiredSecurity(sshd) || sshd["image"] != helperInit["image"] || !reflect.DeepEqual(stringSlice(sshd["command"]), []string{cautemWorkloadRuntimeDir + "/cautem-sshd"}) {
-		return fmt.Errorf("cautem relay-only sshd must use the trusted helper image and required container security")
+	sshd := namedContainer(podSpec, "containers", quarshellWorkloadSSHDName)
+	if !containerHasRequiredSecurity(sshd) || sshd["image"] != helperInit["image"] || !reflect.DeepEqual(stringSlice(sshd["command"]), []string{quarshellWorkloadRuntimeDir + "/quarshell-sshd"}) {
+		return fmt.Errorf("quarshell relay-only sshd must use the trusted helper image and required container security")
 	}
 	if !reflect.DeepEqual(stringSlice(sshd["args"]), []string{
-		"--socket", cautemWorkloadRunDir + "/sshd.sock", "--init", cautemWorkloadRuntimeDir + "/cautem-init",
+		"--socket", quarshellWorkloadRunDir + "/sshd.sock", "--init", quarshellWorkloadRuntimeDir + "/quarshell-init",
 		"--workdir", "/workspace", "--shell", "/bin/sh",
-	}) || !containerMountsVolume(sshd, "quarshell-runtime") || !containerMountsVolume(sshd, "cautem-run") || containerMountsVolume(sshd, cautemWorkloadCredentialName) {
-		return fmt.Errorf("cautem relay-only sshd command or mounts violate the runtime boundary")
+	}) || !containerMountsVolume(sshd, "quarshell-runtime") || !containerMountsVolume(sshd, "quarshell-run") || containerMountsVolume(sshd, quarshellWorkloadCredentialName) {
+		return fmt.Errorf("quarshell relay-only sshd command or mounts violate the runtime boundary")
 	}
 	return nil
 }
@@ -162,21 +162,21 @@ func validateAgentSandboxSupervisorIdentity(supervisor agentSandboxPodIdentity, 
 	if supervisor.BootstrapSecretName != generationSecretName("os-supervisor", params.SandboxID, params.Generation) {
 		return fmt.Errorf("supervisor Pod references a stale or unexpected bootstrap Secret generation")
 	}
-	if params.CautemProxyImage != "" {
-		if supervisor.Image != params.CautemProxyImage || !reflect.DeepEqual(supervisor.Command, cautemProxyCommandStrings()) {
-			return fmt.Errorf("cautem proxy Pod image or command changed")
+	if params.QuarshellProxyImage != "" {
+		if supervisor.Image != params.QuarshellProxyImage || !reflect.DeepEqual(supervisor.Command, quarshellProxyCommandStrings()) {
+			return fmt.Errorf("quarshell proxy Pod image or command changed")
 		}
 		if supervisor.ProviderEnvSecretName != generationSecretName(proxyEnvSecretPrefix, params.SandboxID, params.Generation) {
-			return fmt.Errorf("cautem proxy Pod references a stale or unexpected provider environment Secret")
+			return fmt.Errorf("quarshell proxy Pod references a stale or unexpected provider environment Secret")
 		}
-		if !supervisor.BootstrapGatePresent || !supervisor.ServiceAccountAutomountDisabled || supervisor.HasProjectedServiceAccountToken || supervisor.HasRawGatewayCredentialEnv || supervisor.CautemHasRawTokenEnv {
-			return fmt.Errorf("cautem proxy Pod violates the Secret-file credential boundary")
+		if !supervisor.BootstrapGatePresent || !supervisor.ServiceAccountAutomountDisabled || supervisor.HasProjectedServiceAccountToken || supervisor.HasRawGatewayCredentialEnv || supervisor.QuarshellHasRawTokenEnv {
+			return fmt.Errorf("quarshell proxy Pod violates the Secret-file credential boundary")
 		}
-		if !supervisor.CautemContainerMatches || !supervisor.CautemVolumeSourcesMatch {
-			return fmt.Errorf("admitted Cautem proxy Pod container or Secret volumes changed")
+		if !supervisor.QuarshellContainerMatches || !supervisor.QuarshellVolumeSourcesMatch {
+			return fmt.Errorf("admitted Quarshell proxy Pod container or Secret volumes changed")
 		}
 		if !supervisor.HostNamespacesIsolated || !supervisor.RunAsNonRoot || !supervisor.ReadOnlyRootFilesystem || !supervisor.RuntimeDefaultSeccomp || !supervisor.DropAllCapabilities || !supervisor.PrivilegeEscalationDisabled {
-			return fmt.Errorf("cautem proxy Pod violates the required non-root isolation and container security context")
+			return fmt.Errorf("quarshell proxy Pod violates the required non-root isolation and container security context")
 		}
 		return nil
 	}
@@ -220,18 +220,18 @@ func validateAgentSandboxWorkloadIdentity(workload agentSandboxWorkloadIdentity,
 	if !reflect.DeepEqual(workload.InitContainerNames, requestedInitNames) {
 		return fmt.Errorf("admitted workload Pod init container set changed")
 	}
-	if params.CautemProxyImage != "" {
-		if workload.HasGatewayCredentialEnv || !workload.CautemAgentMountsPrivateSecret || workload.CautemInitMountsPrivateSecret {
-			return fmt.Errorf("cautem workload Pod violates the private credential mount boundary")
+	if params.QuarshellProxyImage != "" {
+		if workload.HasGatewayCredentialEnv || !workload.QuarshellAgentMountsPrivateSecret || workload.QuarshellInitMountsPrivateSecret {
+			return fmt.Errorf("quarshell workload Pod violates the private credential mount boundary")
 		}
-		if !workload.CautemSSHDContainerMatches {
-			return fmt.Errorf("admitted Cautem relay-only sshd container changed")
+		if !workload.QuarshellSSHDContainerMatches {
+			return fmt.Errorf("admitted Quarshell relay-only sshd container changed")
 		}
 		if !workload.AgentContainerMatches || !workload.InitContainerSpecsMatch || !workload.PodVolumeSourcesMatch || !workload.PodSecurityContextMatches || !workload.ServiceAccountMatches {
-			return fmt.Errorf("admitted Cautem workload Pod does not match its requested runtime template")
+			return fmt.Errorf("admitted Quarshell workload Pod does not match its requested runtime template")
 		}
 		if !workload.HostNamespacesIsolated || !workload.RunAsNonRoot || !workload.RuntimeDefaultSeccomp || !workload.DropAllCapabilities || !workload.PrivilegeEscalationDisabled {
-			return fmt.Errorf("admitted Cautem workload Pod violates the required non-root isolation and container security context")
+			return fmt.Errorf("admitted Quarshell workload Pod violates the required non-root isolation and container security context")
 		}
 		return nil
 	}

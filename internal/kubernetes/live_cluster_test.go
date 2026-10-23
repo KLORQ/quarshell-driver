@@ -34,13 +34,13 @@ import (
 // installed Agent Sandbox controller. It is opt-in because it creates real
 // namespaces, PVCs, NetworkPolicies, Pods, and Secrets in the selected cluster.
 func TestLiveDriverLifecycle(t *testing.T) {
-	if os.Getenv("CAUTEM_TEST_KUBERNETES_DRIVER") != "1" {
-		t.Skip("set CAUTEM_TEST_KUBERNETES_DRIVER=1 to run Backend lifecycle against a disposable cluster")
+	if os.Getenv("QUARSHELL_TEST_KUBERNETES_DRIVER") != "1" {
+		t.Skip("set QUARSHELL_TEST_KUBERNETES_DRIVER=1 to run Backend lifecycle against a disposable cluster")
 	}
-	proxyImage := strings.TrimSpace(os.Getenv("CAUTEM_TEST_KUBERNETES_PROXY_IMAGE"))
-	runtimeImage := strings.TrimSpace(os.Getenv("CAUTEM_TEST_KUBERNETES_RUNTIME_IMAGE"))
+	proxyImage := strings.TrimSpace(os.Getenv("QUARSHELL_TEST_KUBERNETES_PROXY_IMAGE"))
+	runtimeImage := strings.TrimSpace(os.Getenv("QUARSHELL_TEST_KUBERNETES_RUNTIME_IMAGE"))
 	if proxyImage == "" || runtimeImage == "" {
-		t.Fatal("set CAUTEM_TEST_KUBERNETES_PROXY_IMAGE and CAUTEM_TEST_KUBERNETES_RUNTIME_IMAGE to digest-pinned images")
+		t.Fatal("set QUARSHELL_TEST_KUBERNETES_PROXY_IMAGE and QUARSHELL_TEST_KUBERNETES_RUNTIME_IMAGE to digest-pinned images")
 	}
 
 	var suffixBytes [5]byte
@@ -86,9 +86,9 @@ func TestLiveDriverLifecycle(t *testing.T) {
 		Network: driver.NetworkSpec{
 			GatewayID: gatewayID, GatewayURL: "http://gateway.invalid:7443",
 			Proxy: &driver.ProxySpec{PolicyPath: policyPath, Environment: []string{
-				"CAUTEM_GATEWAY_URL=http://gateway.invalid:7443",
-				"CAUTEM_SANDBOX=" + name,
-				"CAUTEM_SANDBOX_TOKEN=live-driver-token",
+				"QUARSHELL_GATEWAY_URL=http://gateway.invalid:7443",
+				"QUARSHELL_SANDBOX=" + name,
+				"QUARSHELL_SANDBOX_TOKEN=live-driver-token",
 			}},
 		},
 	}
@@ -217,12 +217,12 @@ func dumpLiveDriverDiagnostics(t *testing.T, ctx context.Context, client kuberne
 	}
 }
 
-// TestLiveAgentSandboxCreateSequence exercises the Cautem Agent Sandbox
+// TestLiveAgentSandboxCreateSequence exercises the Quarshell Agent Sandbox
 // controller and Kubernetes APIs. It is opt-in so ordinary unit tests never
 // need cluster credentials or mutate a developer's cluster.
 func TestLiveAgentSandboxCreateSequence(t *testing.T) {
-	if os.Getenv("CAUTEM_TEST_KUBERNETES") != "1" {
-		t.Skip("set CAUTEM_TEST_KUBERNETES=1 to run against a disposable cluster namespace")
+	if os.Getenv("QUARSHELL_TEST_KUBERNETES") != "1" {
+		t.Skip("set QUARSHELL_TEST_KUBERNETES=1 to run against a disposable cluster namespace")
 	}
 
 	config := liveClusterRESTConfig(t)
@@ -277,7 +277,7 @@ func TestLiveAgentSandboxCreateSequence(t *testing.T) {
 	generation := "live1"
 	image := "registry.k8s.io/pause:3.10.1"
 
-	workloadParams := testCautemWorkloadRenderParams()
+	workloadParams := testQuarshellWorkloadRenderParams()
 	workloadParams.Base.APIVersion = version
 	workloadParams.Base.Namespace = namespace
 	workloadParams.Base.ResourceName = resourceName
@@ -298,9 +298,9 @@ func TestLiveAgentSandboxCreateSequence(t *testing.T) {
 	// Minikube's default provisioner is named "standard". Do not inherit the
 	// renderer fixture's production-specific fast-ssd class in this live test.
 	workloadParams.Base.WorkspaceStorageClass = ""
-	sandboxResource, err := renderCautemAgentSandboxResource(SandboxDriverConfig{}, workloadParams)
+	sandboxResource, err := renderQuarshellAgentSandboxResource(SandboxDriverConfig{}, workloadParams)
 	if err != nil {
-		t.Fatalf("render Cautem Agent Sandbox resource: %v", err)
+		t.Fatalf("render Quarshell Agent Sandbox resource: %v", err)
 	}
 
 	runtimeParams := testAgentSandboxRuntimeRenderParams()
@@ -317,15 +317,15 @@ func TestLiveAgentSandboxCreateSequence(t *testing.T) {
 	runtimeParams.ServiceAccountName = "default"
 	runtimeParams.GatewayEndpoint = ""
 	runtimeParams.ImagePullSecrets = nil
-	runtimeParams.CautemProxyImage = "ghcr.io/cautem/quarshell-proxy@sha256:" + strings.Repeat("b", 64)
-	runtimeParams.CautemGatewayURL = "http://gateway.invalid:7443"
-	runtimeParams.CautemGatewayGRPCEndpoint = "gateway.invalid:7443"
+	runtimeParams.QuarshellProxyImage = "ghcr.io/quarshell/quarshell-proxy@sha256:" + strings.Repeat("b", 64)
+	runtimeParams.QuarshellGatewayURL = "http://gateway.invalid:7443"
+	runtimeParams.QuarshellGatewayGRPCEndpoint = "gateway.invalid:7443"
 
 	identity, err := runAgentSandboxCreateSequence(ctx, newDynamicAgentSandboxCreateBackend(dynamicClient), agentSandboxCreateSequenceInput{
 		SandboxResource: sandboxResource,
 		RuntimeParams:   runtimeParams,
-		BuildCautemSecrets: func(identity agentSandboxCreateIdentity) ([]map[string]any, error) {
-			return buildCautemGenerationSecrets(identity, []byte("version: 1\n"), []string{"CAUTEM_SANDBOX_TOKEN=live-test-token"})
+		BuildQuarshellSecrets: func(identity agentSandboxCreateIdentity) ([]map[string]any, error) {
+			return buildQuarshellGenerationSecrets(identity, []byte("version: 1\n"), []string{"QUARSHELL_SANDBOX_TOKEN=live-test-token"})
 		},
 	})
 	if err != nil {
@@ -365,8 +365,8 @@ func TestLiveAgentSandboxCreateSequence(t *testing.T) {
 // TestLiveNetworkPolicyEnforcement proves that the selected cluster CNI applies
 // the deny-by-default and narrow allow rules used by the workspace fence.
 func TestLiveNetworkPolicyEnforcement(t *testing.T) {
-	if os.Getenv("CAUTEM_TEST_KUBERNETES") != "1" {
-		t.Skip("set CAUTEM_TEST_KUBERNETES=1 to run against a disposable cluster namespace")
+	if os.Getenv("QUARSHELL_TEST_KUBERNETES") != "1" {
+		t.Skip("set QUARSHELL_TEST_KUBERNETES=1 to run against a disposable cluster namespace")
 	}
 
 	config := liveClusterRESTConfig(t)
@@ -378,7 +378,7 @@ func TestLiveNetworkPolicyEnforcement(t *testing.T) {
 	if _, err := rand.Read(suffixBytes[:]); err != nil {
 		t.Fatalf("generate isolated namespace suffix: %v", err)
 	}
-	namespace := "cautem-netpol-" + hex.EncodeToString(suffixBytes[:])
+	namespace := "quarshell-netpol-" + hex.EncodeToString(suffixBytes[:])
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Minute)
 	defer cancel()
 	if _, err := coreClient.CoreV1().Namespaces().Create(ctx, &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: namespace}}, metav1.CreateOptions{}); err != nil {
@@ -476,8 +476,8 @@ func TestLiveNetworkPolicyEnforcement(t *testing.T) {
 // the real API server and ensures one Gateway cannot discover another's
 // namespace set.
 func TestLiveWorkspaceNamespaceDiscovery(t *testing.T) {
-	if os.Getenv("CAUTEM_TEST_KUBERNETES") != "1" {
-		t.Skip("set CAUTEM_TEST_KUBERNETES=1 to run against a disposable cluster namespace")
+	if os.Getenv("QUARSHELL_TEST_KUBERNETES") != "1" {
+		t.Skip("set QUARSHELL_TEST_KUBERNETES=1 to run against a disposable cluster namespace")
 	}
 	config := liveClusterRESTConfig(t)
 	dynamicClient, err := dynamic.NewForConfig(config)

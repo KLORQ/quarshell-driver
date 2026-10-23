@@ -35,7 +35,7 @@ func TestDockerEngineUsesMutualTLSFromEnvironment(t *testing.T) {
 			http.NotFound(w, r)
 			return
 		}
-		if r.TLS == nil || len(r.TLS.PeerCertificates) != 1 || r.TLS.PeerCertificates[0].Subject.CommonName != "cautem-docker-client" {
+		if r.TLS == nil || len(r.TLS.PeerCertificates) != 1 || r.TLS.PeerCertificates[0].Subject.CommonName != "quarshell-docker-client" {
 			t.Errorf("Docker client certificate = %#v", r.TLS)
 		} else {
 			sawClientCertificate.Store(true)
@@ -92,7 +92,7 @@ func tlsEngineCertificates(t *testing.T) (*x509.Certificate, tls.Certificate, tl
 	}
 	caTemplate := &x509.Certificate{
 		SerialNumber:          big.NewInt(1),
-		Subject:               pkix.Name{CommonName: "cautem-docker-test-ca"},
+		Subject:               pkix.Name{CommonName: "quarshell-docker-test-ca"},
 		NotBefore:             now.Add(-time.Minute),
 		NotAfter:              now.Add(time.Hour),
 		IsCA:                  true,
@@ -132,8 +132,8 @@ func tlsEngineCertificates(t *testing.T) (*x509.Certificate, tls.Certificate, tl
 		}
 		return tls.Certificate{Certificate: [][]byte{der}, PrivateKey: key, Leaf: parsed}
 	}
-	serverCert := makeCert(2, "cautem-docker-server", x509.ExtKeyUsageServerAuth, []net.IP{net.ParseIP("127.0.0.1")})
-	clientCert := makeCert(3, "cautem-docker-client", x509.ExtKeyUsageClientAuth, nil)
+	serverCert := makeCert(2, "quarshell-docker-server", x509.ExtKeyUsageServerAuth, []net.IP{net.ParseIP("127.0.0.1")})
+	clientCert := makeCert(3, "quarshell-docker-client", x509.ExtKeyUsageClientAuth, nil)
 	return ca, serverCert, clientCert
 }
 

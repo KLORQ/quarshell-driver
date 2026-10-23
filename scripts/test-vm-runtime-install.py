@@ -7,13 +7,13 @@ rollback = script_dir / "rollback-vm-runtime.sh"
 host = subprocess.check_output(["go", "env", "GOOS"], text=True).strip() + "/" + subprocess.check_output(["go", "env", "GOARCH"], text=True).strip()
 arch = subprocess.check_output(["go", "env", "GOARCH"], text=True).strip()
 names = [
-    "cautem-vm-worker",
-    f"cautem-vm-umoci-linux-{arch}",
-    f"cautem-vm-guest-agent-linux-{arch}",
-    f"cautem-init-linux-{arch}",
-    f"cautem-supervisor-linux-{arch}",
-    f"cautem-sshd-linux-{arch}",
-    f"cautem-vm-security-probe-linux-{arch}",
+    "quarshell-vm-worker",
+    f"quarshell-vm-umoci-linux-{arch}",
+    f"quarshell-vm-guest-agent-linux-{arch}",
+    f"quarshell-init-linux-{arch}",
+    f"quarshell-supervisor-linux-{arch}",
+    f"quarshell-sshd-linux-{arch}",
+    f"quarshell-vm-security-probe-linux-{arch}",
 ]
 
 def bundle(root: pathlib.Path, marker: str) -> pathlib.Path:
@@ -34,22 +34,22 @@ with tempfile.TemporaryDirectory() as temporary:
     first = bundle(temp / "v1", "v1")
     subprocess.run([str(install), str(first), str(prefix)], check=True)
     current = (prefix / "current").resolve()
-    assert (current / "cautem-vm-worker").read_text().endswith("v1\n")
+    assert (current / "quarshell-vm-worker").read_text().endswith("v1\n")
     second = bundle(temp / "v2", "v2")
     subprocess.run([str(install), str(second), str(prefix)], check=True)
     assert (prefix / "current").resolve() != current
     subprocess.run([str(rollback), str(prefix)], check=True)
     assert (prefix / "current").resolve() == current
     tampered = bundle(temp / "bad", "bad")
-    (tampered / "cautem-vm-worker").write_text("#!/bin/sh\nexit 1\n")
+    (tampered / "quarshell-vm-worker").write_text("#!/bin/sh\nexit 1\n")
     if subprocess.run([str(install), str(tampered), str(temp / "prefix2")], capture_output=True).returncode == 0:
         raise SystemExit("tampered bundle accepted")
     linked = bundle(temp / "link", "link")
     victim = temp / "victim"
     victim.write_text("#!/bin/sh\n")
     victim.chmod(0o755)
-    (linked / "cautem-vm-worker").unlink()
-    (linked / "cautem-vm-worker").symlink_to(victim)
+    (linked / "quarshell-vm-worker").unlink()
+    (linked / "quarshell-vm-worker").symlink_to(victim)
     if subprocess.run([str(install), str(linked), str(temp / "prefix3")], capture_output=True).returncode == 0:
         raise SystemExit("symlink artifact accepted")
 print("vm runtime install/upgrade/rollback: PASS")

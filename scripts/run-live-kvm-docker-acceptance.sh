@@ -3,14 +3,14 @@ set -eu
 unset GOROOT
 
 script_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
-build_dir=${CAUTEM_VM_BUILD_DIR:-"$(mktemp -d "${TMPDIR:-/tmp}/cautem-kvm-docker.XXXXXX")"}
+build_dir=${QUARSHELL_VM_BUILD_DIR:-"$(mktemp -d "${TMPDIR:-/tmp}/quarshell-kvm-docker.XXXXXX")"}
 made_build_dir=0
-if [ -z "${CAUTEM_VM_BUILD_DIR:-}" ]; then made_build_dir=1; fi
+if [ -z "${QUARSHELL_VM_BUILD_DIR:-}" ]; then made_build_dir=1; fi
 fixture_dir="$build_dir/nested-docker-fixture"
 mkdir -p "$build_dir"
 rm -rf "$fixture_dir"
 mkdir -m 700 "$fixture_dir"
-owner="cautem-vm-docker-$$"
+owner="quarshell-vm-docker-$$"
 container_id=
 status=0
 cleanup() {
@@ -44,20 +44,20 @@ docker save --output "$fixture_dir/alpine-image.tar" "$test_image_tag"
 chmod 0644 "$fixture_dir/alpine-image.tar"
 
 container_id=$(docker create --platform "linux/$host_arch" \
-  --label "cautem.vm-test.owner=$owner" --entrypoint /bin/sh "$docker_dind_image" -c 'sleep 3600')
+  --label "quarshell.vm-test.owner=$owner" --entrypoint /bin/sh "$docker_dind_image" -c 'sleep 3600')
 docker start "$container_id" >/dev/null
 docker exec "$container_id" addgroup -g 1000 -S sandbox
 docker exec "$container_id" adduser -D -H -u 1000 -G sandbox sandbox
-docker exec "$container_id" mkdir -p /opt/cautem-test
-docker cp "$fixture_dir/alpine-image.tar" "$container_id:/opt/cautem-test/alpine-image.tar"
+docker exec "$container_id" mkdir -p /opt/quarshell-test
+docker cp "$fixture_dir/alpine-image.tar" "$container_id:/opt/quarshell-test/alpine-image.tar"
 docker stop "$container_id" >/dev/null
 docker export --output "$fixture_dir/docker-engine-rootfs.tar" "$container_id"
 docker rm "$container_id" >/dev/null
 container_id=
 chmod 0644 "$fixture_dir/docker-engine-rootfs.tar"
 
-CAUTEM_VM_BUILD_DIR=$build_dir \
-CAUTEM_VM_TEST_ROOTFS_TAR="$fixture_dir/docker-engine-rootfs.tar" \
-CAUTEM_VM_DOCKER_ACCEPTANCE=1 \
-CAUTEM_VM_TEST_NAME=TestLiveMicroVMNestedDocker \
+QUARSHELL_VM_BUILD_DIR=$build_dir \
+QUARSHELL_VM_TEST_ROOTFS_TAR="$fixture_dir/docker-engine-rootfs.tar" \
+QUARSHELL_VM_DOCKER_ACCEPTANCE=1 \
+QUARSHELL_VM_TEST_NAME=TestLiveMicroVMNestedDocker \
 "$script_dir/run-live-kvm-acceptance.sh"
