@@ -62,7 +62,6 @@ chmod 0644 "$fixture_dir/bootstrap-rootfs.tar"
 container_id=$(docker create --platform "linux/$host_arch" \
   --label "quarshell.vm-test.owner=$owner" --entrypoint /bin/sh "$image" -c 'sleep 3600')
 docker start "$container_id" >/dev/null
-docker exec "$container_id" id sandbox >/dev/null
 docker exec "$container_id" mkdir -p /opt/quarshell-test
 docker cp "$fixture_dir/alpine-image.tar" "$container_id:/opt/quarshell-test/alpine-image.tar"
 docker stop "$container_id" >/dev/null

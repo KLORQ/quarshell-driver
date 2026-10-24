@@ -102,6 +102,25 @@ if [ "${1:-}" = env ]; then
   esac
   exit 0
 fi
+if [ "${1:-}" = build ]; then
+  output=
+  while [ "$#" -gt 0 ]; do
+    if [ "$1" = -o ]; then
+      shift
+      output=${1:-}
+      break
+    fi
+    shift
+  done
+  if [ -z "$output" ]; then
+    echo "mock go build did not receive -o" >&2
+    exit 3
+  fi
+  mkdir -p "$(dirname "$output")"
+  printf '#!/bin/sh\nexit 0\n' >"$output"
+  chmod 0755 "$output"
+  exit 0
+fi
 if [ "${1:-}" = test ] && [ "${QUARSHELL_VM_TEST_ROOTFS_TAR##*/}" = alpine-rootfs.tar ]; then
   if [ "${QUARSHELL_TEST_INVALID_ROOTFS:-0}" = 1 ] && [ "$(cat "$QUARSHELL_VM_TEST_ROOTFS_TAR")" != 'fixture rootfs archive' ]; then
     printf '%s\n' \

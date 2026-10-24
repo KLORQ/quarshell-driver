@@ -4,6 +4,7 @@ unset GOROOT
 
 script_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 module_dir=$(CDPATH= cd -- "$script_dir/.." && pwd)
+workspace_dir=$(CDPATH= cd -- "$module_dir/.." && pwd)
 vm_module_dir="$module_dir/../quarshell-driver-vm"
 host_os=$(go env GOOS)
 host_arch=$(go env GOARCH)
@@ -71,6 +72,7 @@ trap 'exit 143' TERM
 guest_agent=${QUARSHELL_VM_TEST_GUEST_AGENT:-"$build_dir/quarshell-vm-guest-agent-linux-$host_arch"}
 worker=${QUARSHELL_VM_WORKER:-"$build_dir/quarshell-vm-worker"}
 security_probe=${QUARSHELL_VM_TEST_SECURITY_PROBE:-"$build_dir/quarshell-vm-security-probe-linux-$host_arch"}
+proxy_cli=${QUARSHELL_VM_TEST_PROXY_CLI:-"$build_dir/quarshell-proxy-cli"}
 manifest="$build_dir/vm-runtime-manifest.json"
 if ! python3 "$script_dir/verify-vm-runtime-manifest.py" "$manifest" "linux/$host_arch" "$host_arch" >/dev/null 2>&1; then
   QUARSHELL_VM_BUILD_DIR=$build_dir QUARSHELL_VM_GUEST_ARCH=$host_arch "$script_dir/build-vm-runtime.sh"
@@ -80,6 +82,8 @@ if [ ! -x "$guest_agent" ] || [ ! -x "$worker" ]; then
   echo "VM worker and static guest agent paths must point to executable runtime artifacts" >&2
   exit 1
 fi
+
+go build -C "$workspace_dir/quarshell-cli" -o "$proxy_cli" ./cmd/quarshell
 
 rootfs_tar=${QUARSHELL_VM_TEST_ROOTFS_TAR:-}
 if [ -z "$rootfs_tar" ]; then
@@ -122,6 +126,7 @@ QUARSHELL_VM_TEST_INIT_BIN=${QUARSHELL_VM_TEST_INIT_BIN:-"$build_dir/quarshell-i
 QUARSHELL_VM_TEST_SUPERVISOR_BIN=${QUARSHELL_VM_TEST_SUPERVISOR_BIN:-"$build_dir/quarshell-supervisor-linux-$host_arch"} \
 QUARSHELL_VM_TEST_SSH_BIN=${QUARSHELL_VM_TEST_SSH_BIN:-"$build_dir/quarshell-sshd-linux-$host_arch"} \
 QUARSHELL_VM_TEST_SECURITY_PROBE=$security_probe \
+QUARSHELL_VM_TEST_PROXY_CLI=$proxy_cli \
 QUARSHELL_VM_TEST_E2FS_FORMATTER=$formatter \
 QUARSHELL_VM_WORKER=$worker \
 OPENSHELL_VM_RUNTIME_DIR=$runtime_dir \
