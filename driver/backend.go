@@ -264,6 +264,16 @@ type ExecTerminalAttach interface {
 	AttachExecTerminal(context.Context, core.ID, string) (ExecTerminalSession, error)
 }
 
+// ExecTerminalCursorAttacher resumes PTY replay after a durable output cursor.
+type ExecTerminalCursorAttacher interface {
+	AttachExecTerminalFromCursor(context.Context, core.ID, string, uint64) (ExecTerminalSession, error)
+}
+
+// ExecTerminalOutputReader exposes atomic output frames and their replay cursor.
+type ExecTerminalOutputReader interface {
+	ReadOutput() ([]byte, uint64, error)
+}
+
 // ExecTerminalSessionID exposes the stable identifier needed to reattach after
 // a transport disconnect.
 type ExecTerminalSessionID interface {
@@ -283,6 +293,13 @@ type ExecStreamOutput struct {
 	Stderr   []byte
 	ExitCode int
 	Exited   bool
+	Cursor   uint64
+}
+
+// ExecStreamCursorAttacher resumes retained output after the last durably
+// acknowledged frame. Cursor zero is a valid position before the first frame.
+type ExecStreamCursorAttacher interface {
+	AttachExecStreamFromCursor(context.Context, core.ID, string, uint64) (ExecStreamSession, error)
 }
 
 // ExecStreamSession is a full-duplex non-TTY process stream. Output channels
@@ -299,11 +316,110 @@ type InteractiveExecStream interface {
 	OpenExecStream(context.Context, core.ID, ExecTerminalRequest) (ExecStreamSession, error)
 }
 
+// ExecStreamAttach reconnects to a retained non-TTY process after its output
+// stream disconnects.
+type ExecStreamAttach interface {
+	AttachExecStream(context.Context, core.ID, string) (ExecStreamSession, error)
+}
+
+// ExecStreamSessionID exposes the stable identifier used to reattach a
+// retained non-TTY process.
+type ExecStreamSessionID interface {
+	SessionID() string
+}
+
+// BoundaryProcess is a placement-neutral handle for a retained process.
+// Operations remain valid after an output attachment is closed, and callers
+// address the process by this handle rather than by a host or guest PID.
+type BoundaryProcess interface {
+	SessionID() string
+	Attach(context.Context) (BoundaryProcessAttachment, error)
+	Wait(context.Context) (int, error)
+	Signal(context.Context, ExecProcessSignal) error
+	Terminate(context.Context) error
+}
+
+// BoundaryProcessAttachment owns one input attachment to a retained process.
+// Output is separate from attachment lifetime and may be resumed on a new
+// attachment.
+type BoundaryProcessAttachment interface {
+	ReadOutput() (ExecStreamOutput, error)
+	Write([]byte) (int, error)
+	CloseStdin() error
+	Resize(context.Context, uint32, uint32) error
+	Close() error
+}
+
+// BoundaryProcessOwner exposes the retained process handle associated with an
+// interactive exec stream.
+type BoundaryProcessOwner interface {
+	BoundaryProcess() BoundaryProcess
+}
+
+// MainProcessBoundary opens a placement-neutral handle for the canonical
+// workload process managed by a running sandbox.
+type MainProcessBoundary interface {
+	OpenMainProcessBoundary(context.Context, core.ID) (BoundaryProcess, error)
+}
+
+// BoundaryExecSpec describes a command started inside a running boundary.
+type BoundaryExecSpec struct {
+	Argv         []string
+	Env          []string
+	WorkDir      string
+	NoLoginShell bool
+	TTY          bool
+	Columns      uint32
+	Rows         uint32
+}
+
+// BoundaryExecSession owns a retained process and its first I/O attachment.
+type BoundaryExecSession struct {
+	Process    BoundaryProcess
+	Attachment BoundaryProcessAttachment
+}
+
+// BoundaryExec starts an additional command inside a running boundary.
+type BoundaryExec interface {
+	Exec(context.Context, BoundaryExecSpec) (BoundaryExecSession, error)
+}
+
+// BoundaryLoopbackConnector dials a loopback TCP target from inside a
+// boundary. Implementations must reject non-loopback targets.
+type BoundaryLoopbackConnector interface {
+	Connect(context.Context, string, uint16) (io.ReadWriteCloser, error)
+}
+
+// RunningBoundary groups the admitted process and capabilities owned by one
+// running sandbox boundary.
+type RunningBoundary interface {
+	Agent() BoundaryProcess
+	Exec() BoundaryExec
+	LoopbackConnector() BoundaryLoopbackConnector
+	Terminate(context.Context) error
+}
+
+// RunningBoundaryProvider exposes the aggregate boundary contract when a
+// backend can retain process and connection handles independently.
+type RunningBoundaryProvider interface {
+	OpenRunningBoundary(context.Context, core.ID) (RunningBoundary, error)
+}
+
 // MainProcessStream attaches to a retained canonical workload that was started
 // without a PTY. Output streams remain separate and stdin has one attachment
 // owner at a time.
 type MainProcessStream interface {
 	OpenMainProcessStream(context.Context, core.ID) (ExecStreamSession, error)
+}
+
+// MainProcessStreamCursorAttacher resumes canonical non-TTY output after a durable reader cursor.
+type MainProcessStreamCursorAttacher interface {
+	OpenMainProcessStreamFromCursor(context.Context, core.ID, uint64) (ExecStreamSession, error)
+}
+
+// MainProcessTTYCursorAttacher resumes canonical PTY output after a durable reader cursor.
+type MainProcessTTYCursorAttacher interface {
+	OpenMainProcessTTYFromCursor(context.Context, core.ID, uint32, uint32, uint64) (io.ReadWriteCloser, error)
 }
 
 // ExecTerminalInputCloser signals end-of-input without closing the terminal

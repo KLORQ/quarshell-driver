@@ -42,7 +42,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: KLORQ/quarshell-proto
-          ref: v0.2.6
+          ref: v0.2.7
           path: quarshell-proto
       - name: Checkout quarshell-proxy workspace dependency
         uses: actions/checkout@v4
@@ -121,7 +121,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: KLORQ/quarshell-proto
-          ref: v0.2.6
+          ref: v0.2.7
           path: quarshell-proto
       - name: Checkout quarshell-proxy workspace dependency
         uses: actions/checkout@v4
@@ -200,7 +200,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: KLORQ/quarshell-proto
-          ref: v0.2.6
+          ref: v0.2.7
           path: quarshell-proto
       - name: Checkout quarshell-proxy workspace dependency
         uses: actions/checkout@v4
@@ -277,7 +277,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: KLORQ/quarshell-proto
-          ref: v0.2.6
+          ref: v0.2.7
           path: quarshell-proto
       - name: Checkout quarshell-proxy workspace dependency
         uses: actions/checkout@v4
@@ -375,21 +375,21 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: KLORQ/quarshell-driver-vm
-          ref: v0.1.7
+          ref: v0.1.11
           path: quarshell-driver-vm
 
       - name: Checkout quarshell-runtime helpers
         uses: actions/checkout@v4
         with:
           repository: KLORQ/quarshell-runtime
-          ref: v0.1.5
+          ref: v0.1.6
           path: quarshell-runtime
 
       - name: Checkout quarshell-proto workspace dependency
         uses: actions/checkout@v4
         with:
           repository: KLORQ/quarshell-proto
-          ref: v0.2.6
+          ref: v0.2.7
           path: quarshell-proto
       - name: Checkout quarshell-proxy workspace dependency
         uses: actions/checkout@v4
