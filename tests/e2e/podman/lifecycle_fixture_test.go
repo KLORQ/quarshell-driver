@@ -702,6 +702,7 @@ uid=$(id -u); gid=$(id -g)
 				t.Fatalf("%s userns identity probe exit=%d err=%v", mode, execState.ExitCode, err)
 			}
 			var guestUID, guestGID, mappedUID, mappedGID uint64
+			var uidMapped, gidMapped bool
 			probeOutput, err := os.ReadFile(marker)
 			if err != nil {
 				t.Fatalf("read host-side %s userns probe output: %v", mode, err)
@@ -731,11 +732,13 @@ uid=$(id -u); gid=$(id -g)
 				}
 				if mapSection == "uid" && guestUID >= containerID && guestUID-containerID < size {
 					mappedUID = hostID + guestUID - containerID
+					uidMapped = true
 				} else if mapSection == "gid" && guestGID >= containerID && guestGID-containerID < size {
 					mappedGID = hostID + guestGID - containerID
+					gidMapped = true
 				}
 			}
-			if mappedUID == 0 && guestUID != 0 || mappedGID == 0 && guestGID != 0 {
+			if !uidMapped || !gidMapped {
 				t.Fatalf("%s userns maps do not include workload identity: %q", mode, probeOutput)
 			}
 			if guestUID != 1000 || guestGID != 1000 {
